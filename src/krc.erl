@@ -1,24 +1,23 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc K Riak Client.
-%%% @copyright 2012 Klarna AB
+%%%
+%%% Copyright 2013 Kivra AB
+%%% Copyright 2011-2013 Klarna AB
+%%%
+%%% Licensed under the Apache License, Version 2.0 (the "License");
+%%% you may not use this file except in compliance with the License.
+%%% You may obtain a copy of the License at
+%%%
+%%%     http://www.apache.org/licenses/LICENSE-2.0
+%%%
+%%% Unless required by applicable law or agreed to in writing, software
+%%% distributed under the License is distributed on an "AS IS" BASIS,
+%%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%% See the License for the specific language governing permissions and
+%%% limitations under the License.
+%%%
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%%
-%%%   Copyright 2011-2013 Klarna AB
-%%%
-%%%   Licensed under the Apache License, Version 2.0 (the "License");
-%%%   you may not use this file except in compliance with the License.
-%%%   You may obtain a copy of the License at
-%%%
-%%%       http://www.apache.org/licenses/LICENSE-2.0
-%%%
-%%%   Unless required by applicable law or agreed to in writing, software
-%%%   distributed under the License is distributed on an "AS IS" BASIS,
-%%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%%%   See the License for the specific language governing permissions and
-%%%   limitations under the License.
-%%%
 
 %%%_* Module declaration ===============================================
 -module(krc).
@@ -43,11 +42,7 @@
 %%%_* Includes =========================================================
 -include("krc.hrl").
 -include_lib("krc/include/krc.hrl").
--include_lib("tulib/include/assert.hrl").
--include_lib("tulib/include/logging.hrl").
--include_lib("tulib/include/metrics.hrl").
--include_lib("tulib/include/prelude.hrl").
--include_lib("tulib/include/types.hrl").
+-include_lib("stdlib2/include/prelude.hrl").
 
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
@@ -61,7 +56,7 @@
 -type obj()      :: krc_obj:ect().
 
 %%%_ * API -------------------------------------------------------------
--spec delete(server(), bucket(), key()) -> whynot().
+-spec delete(server(), bucket(), key()) -> whynot(_).
 %% @doc Delete K from B.
 delete(S, B, K) -> krc_server:delete(S, B, K).
 
@@ -107,27 +102,27 @@ get_index(S, B, I, K) ->
   get_index(S, B, I, K, defaulty()).
 get_index(S, B, I, K, F) when is_function(F, 2) ->
   {ok, Keys} = krc_server:get_index(S, B, I, K),
-  tulib_par:eval(fun(Key) -> get(S, B, Key, F) end,
-                 Keys,
-                 [{errors, false}, {chunk_size, 100}]).
+  s2_par:map(fun(Key) -> get(S, B, Key, F) end,
+             Keys,
+             [{errors, false}, {chunksize, 100}]).
 
 
--spec put(server(), obj()) -> whynot().
+-spec put(server(), obj()) -> whynot(_).
 %% @doc Store O.
 put(S, O) -> krc_server:put(S, O).
 
 
--spec put_index(server(), obj(), krc_obj:indices()) -> whynot().
+-spec put_index(server(), obj(), krc_obj:indices()) -> whynot(_).
 %% @doc Add O to Indices and store it.
 put_index(S, O, Indices) when is_list(Indices) ->
   krc_server:put(S, krc_obj:set_indices(O, Indices)).
 
-%%%_* Internal =========================================================
+%%%_ * Internals -------------------------------------------------------
 %% @doc We automatically try to GET this many times.
-get_tries() -> tulib_util:get_env(get_tries, 3, ?APP).
+get_tries() -> s2_env:get_arg([], ?APP, get_tries, 3).
 
 %% @doc This many ms in-between tries.
-retry_wait_ms() -> tulib_util:get_env(retry_wait_ms, 20, ?APP).
+retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
@@ -183,7 +178,7 @@ basic_index_test() ->
     ok         = put_index(krc_server, Obj1, [Idx]),
     ok         = put_index(krc_server, Obj2, [Idx]),
     {ok, Objs} = get_index(krc_server, B, I, IK),
-    true       = tulib_predicates:is_permutation([V1, V2], vals(Objs))
+    true       = s2_lists:is_permutation([V1, V2], vals(Objs))
   end).
 
 empty_index_test() ->
@@ -215,10 +210,10 @@ multiple_indices_test() ->
     {ok, Objs3} = get_index(krc_server, B2, I1, IK1),
     {ok, Objs4} = get_index(krc_server, B2, I2, IK2),
 
-    true        = tulib_predicates:is_permutation(vals(Objs1), [V1, V2]),
-    true        = tulib_predicates:is_permutation(vals(Objs2), [V1, V2]),
-    true        = tulib_predicates:is_permutation(vals(Objs3), [V1, V2]),
-    true        = tulib_predicates:is_permutation(vals(Objs4), [V1, V2])
+    true        = s2_lists:is_permutation(vals(Objs1), [V1, V2]),
+    true        = s2_lists:is_permutation(vals(Objs2), [V1, V2]),
+    true        = s2_lists:is_permutation(vals(Objs3), [V1, V2]),
+    true        = s2_lists:is_permutation(vals(Objs4), [V1, V2])
   end).
 
 index_get_error_test() ->
@@ -264,7 +259,7 @@ conflict_error_test() ->
     ok                      = put(krc_server, Obj2),
     {error, Rsn}            = get(krc_server, B, K),
     {conflict, V1_, V2_, _} = Rsn,
-    true                    = tulib_predicates:is_permutation([V1, V2], [V1_, V2_])
+    true                    = s2_lists:is_permutation([V1, V2], [V1_, V2_])
   end).
 
 get_error_test() ->

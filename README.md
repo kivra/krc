@@ -11,12 +11,12 @@ A simple wrapper around the official Riak clients for Erlang.
 Costs an extra copy, yields nicer API.
 
 ## Installation
-jakob@moody.primat.es:~/git/klarna/krc$ gmake
+jakob@moody.primat.es:~/git/erlang/krc$ gmake
 
-jakob@moody.primat.es:~/git/klarna/krc$ gmake test
+jakob@moody.primat.es:~/git/erlang/krc$ gmake test
 
 ## Manifest
-* krc.erl             -- main API
+* krc.erl             -- API
 * krc.hrl             -- internal header
 * krc_app.erl         -- application
 * krc_mock_client.erl -- mock backend client

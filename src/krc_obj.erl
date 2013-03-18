@@ -1,24 +1,23 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc Conversion from/to riak-erlang-client objects.
-%%% @copyright 2012 Klarna AB
+%%%
+%%% Copyright 2013 Kivra AB
+%%% Copyright 2011-2013 Klarna AB
+%%%
+%%% Licensed under the Apache License, Version 2.0 (the "License");
+%%% you may not use this file except in compliance with the License.
+%%% You may obtain a copy of the License at
+%%%
+%%%     http://www.apache.org/licenses/LICENSE-2.0
+%%%
+%%% Unless required by applicable law or agreed to in writing, software
+%%% distributed under the License is distributed on an "AS IS" BASIS,
+%%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%% See the License for the specific language governing permissions and
+%%% limitations under the License.
+%%%
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%%
-%%%   Copyright 2011-2013 Klarna AB
-%%%
-%%%   Licensed under the Apache License, Version 2.0 (the "License");
-%%%   you may not use this file except in compliance with the License.
-%%%   You may obtain a copy of the License at
-%%%
-%%%       http://www.apache.org/licenses/LICENSE-2.0
-%%%
-%%%   Unless required by applicable law or agreed to in writing, software
-%%%   distributed under the License is distributed on an "AS IS" BASIS,
-%%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%%%   See the License for the specific language governing permissions and
-%%%   limitations under the License.
-%%%
 
 %%%_* Module declaration ===============================================
 -module(krc_obj).
@@ -63,10 +62,7 @@
 -include("krc.hrl").
 -include_lib("krc/include/krc.hrl").
 -include_lib("riak_pb/include/riak_pb_kv_codec.hrl").
--include_lib("tulib/include/assert.hrl").
--include_lib("tulib/include/logging.hrl").
--include_lib("tulib/include/prelude.hrl").
--include_lib("tulib/include/types.hrl").
+-include_lib("stdlib2/include/prelude.hrl").
 
 %%%_* Code =============================================================
 %%%_ * ADT -------------------------------------------------------------
@@ -133,7 +129,7 @@ to_riakc_obj(#krc_obj{bucket=B, key=K, indices=I, val=V, vclock=C}) ->
 -spec from_riakc_obj(riakc_obj()) -> ect() | no_return().
 %% Siblings need to be resolved separately.
 from_riakc_obj(Obj) ->
-  ?match({riakc_obj, _, _, _, _, undefined, undefined}, Obj),
+  {riakc_obj, _, _, _, _, undefined, undefined} = Obj, %assert
   Contents = riakc_obj:get_contents(Obj),
   #krc_obj{ bucket  = decode(riakc_obj:bucket(Obj))
           , key     = decode(riakc_obj:key(Obj))
@@ -163,7 +159,7 @@ decode_indices(MD) ->
 %% @doc Resolve conflicts by taking the union of all indices and
 %% computing the LUB of all values under F.
 resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
-  ?lift(Obj#krc_obj{ val     = ?unlift(tulib_maybe:reduce(F, Vs))
+  ?lift(Obj#krc_obj{ val     = ?unlift(s2_maybe:reduce(F, Vs))
                    , indices = lists:usort(lists:flatten(Is))
                    }).
 
@@ -180,10 +176,10 @@ decode(X)                      -> binary_to_term(X).
 %% Index names (Riak uses strings with a type suffix; we only use one
 %% index type, `binary', and allow any Erlang term as the name).
 -spec encode_idx(_)            -> binary().
-encode_idx(Name)               -> ?l2b(add_suffix(tulib_hex:encode(Name))).
+encode_idx(Name)               -> ?l2b(add_suffix(s2_hex:encode(Name))).
 
 -spec decode_idx(binary())     -> _.
-decode_idx(Name)               -> tulib_hex:decode(drop_suffix(?b2l(Name))).
+decode_idx(Name)               -> s2_hex:decode(drop_suffix(?b2l(Name))).
 
 add_suffix(Str)                -> Str ++ "_bin".
 drop_suffix(Str)               -> "nib_" ++ Rest = lists:reverse(Str),
@@ -191,10 +187,10 @@ drop_suffix(Str)               -> "nib_" ++ Rest = lists:reverse(Str),
 
 %% Index entries (must be ASCII strings in Riak, any Erlang term in KRC).
 -spec encode_idx_key(_)        -> binary().
-encode_idx_key(Entry)          -> ?l2b(tulib_hex:encode(Entry)).
+encode_idx_key(Entry)          -> ?l2b(s2_hex:encode(Entry)).
 
 -spec decode_idx_key(binary()) -> _.
-decode_idx_key(Entry)          -> tulib_hex:decode(?b2l(Entry)).
+decode_idx_key(Entry)          -> s2_hex:decode(?b2l(Entry)).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).

@@ -1,24 +1,23 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc Mock Riak.
-%%% @copyright 2012 Klarna AB
+%%%
+%%% Copyright 2013 Kivra AB
+%%% Copyright 2011-2013 Klarna AB
+%%%
+%%% Licensed under the Apache License, Version 2.0 (the "License");
+%%% you may not use this file except in compliance with the License.
+%%% You may obtain a copy of the License at
+%%%
+%%%     http://www.apache.org/licenses/LICENSE-2.0
+%%%
+%%% Unless required by applicable law or agreed to in writing, software
+%%% distributed under the License is distributed on an "AS IS" BASIS,
+%%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%% See the License for the specific language governing permissions and
+%%% limitations under the License.
+%%%
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%%
-%%%   Copyright 2011-2013 Klarna AB
-%%%
-%%%   Licensed under the Apache License, Version 2.0 (the "License");
-%%%   you may not use this file except in compliance with the License.
-%%%   You may obtain a copy of the License at
-%%%
-%%%       http://www.apache.org/licenses/LICENSE-2.0
-%%%
-%%%   Unless required by applicable law or agreed to in writing, software
-%%%   distributed under the License is distributed on an "AS IS" BASIS,
-%%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%%%   See the License for the specific language governing permissions and
-%%%   limitations under the License.
-%%%
 
 %%%_* Module declaration ===============================================
 -module(krc_mock_client).
@@ -53,7 +52,7 @@
         ]).
 
 %%%_* Includes =========================================================
--include_lib("tulib/include/prelude.hrl").
+-include_lib("stdlib2/include/prelude.hrl").
 
 %%%_* Code =============================================================
 %%%_ * API -------------------------------------------------------------
@@ -63,9 +62,8 @@ start() -> gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
 start_link(_IP, _Port, _Options) ->
   case whereis(?MODULE) of
-    Pid when is_pid(Pid) ->
-      {ok, Pid};
-    undefined -> throw(missing_mock_client)
+    Pid when is_pid(Pid) -> {ok, Pid};
+    undefined            -> throw(missing_mock_client)
   end.
 
 stop() -> ok = gen_server:call(?MODULE, stop).
@@ -90,12 +88,11 @@ call(Pid, {_F, A} = Req) ->
     {error, _} = Err                       -> Err
   end.
 
-
 %%%_ * gen_server callbacks --------------------------------------------
 -record(s,
-        { tabs=tulib_maps:new()                :: _
-        , idxs=tulib_maps:new()                :: _
-        , revdxs=tulib_maps:new()              :: _
+        { tabs=s2_maps:new()                   :: _
+        , idxs=s2_maps:new()                   :: _
+        , revdxs=s2_maps:new()                 :: _
         , con=true                             :: boolean()
         , lag=0                                :: timeout()
         }).
@@ -122,9 +119,9 @@ do_call(F, A, #s{lag=Lag} = S) ->
   do(F, A, S).
 
 do(get, [B, K, _, _], #s{tabs=Tabs} = S) ->
-  {S, tulib_maps:get(Tabs, [B, K])};
+  {S, s2_maps:get(Tabs, [B, K])};
 do(get_index, [B, I, K, _], #s{idxs=Idxs} = S) ->
-  {S, case tulib_maps:get(Idxs, [B, I, K]) of
+  {S, case s2_maps:get(Idxs, [B, I, K]) of
         {ok, _} = Ok      -> Ok;
         {error, notfound} -> {ok, []}
       end};
@@ -132,7 +129,7 @@ do(put, [O, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
   Bucket  = krc_obj:bucket(O),
   Key     = krc_obj:key(O),
   Indices = krc_obj:indices(O),
-  Tabs    = tulib_maps:set(Tabs0, [Bucket, Key], O),
+  Tabs    = s2_maps:set(Tabs0, [Bucket, Key], O),
   Idxs    = lists:foldl(
               fun({Idx, IdxKey}, Idxs) ->
                 add(Idxs, [Bucket, Idx, IdxKey], Key)
@@ -143,17 +140,17 @@ do(put, [O, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
               end, Revdxs0, Indices),
   {S#s{tabs=Tabs, idxs=Idxs, revdxs=Revdxs}, ok};
 do(delete, [B, K, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
-  Indices = tulib_maps:get(Revdxs0, [B, K], []),
-  Tabs    = tulib_maps:delete(Tabs0, [B, K]),
+  Indices = s2_maps:get(Revdxs0, [B, K], []),
+  Tabs    = s2_maps:delete(Tabs0, [B, K]),
   Idxs    = lists:foldl(
               fun({Idx, IdxKey}, Idxs) ->
                 del(Idxs, [B, Idx, IdxKey], K)
               end, Idxs0, Indices),
-  Revdxs  = tulib_maps:delete(Revdxs0, [B, K]),
+  Revdxs  = s2_maps:delete(Revdxs0, [B, K]),
   {S#s{tabs=Tabs, idxs=Idxs, revdxs=Revdxs}, ok}.
 
-add(Map, Ks, V) -> tulib_maps:update(Map, Ks, tulib_lists:cons(V), [V]).
-del(Map, Ks, V) -> tulib_maps:update(Map, Ks, fun(Vs) -> Vs -- [V] end, []).
+add(Map, Ks, V) -> s2_maps:update(Map, Ks, s2_lists:cons(V), [V]).
+del(Map, Ks, V) -> s2_maps:update(Map, Ks, fun(Vs) -> Vs -- [V] end, []).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).

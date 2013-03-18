@@ -46,25 +46,23 @@
 %%%     dies, the other will be killed as well and all requests in the
 %%%     connection's message queue will time out.
 %%%
-%%% @copyright 2012 Klarna AB
+%%% Copyright 2013 Kivra AB
+%%% Copyright 2011-2013 Klarna AB
+%%%
+%%% Licensed under the Apache License, Version 2.0 (the "License");
+%%% you may not use this file except in compliance with the License.
+%%% You may obtain a copy of the License at
+%%%
+%%%     http://www.apache.org/licenses/LICENSE-2.0
+%%%
+%%% Unless required by applicable law or agreed to in writing, software
+%%% distributed under the License is distributed on an "AS IS" BASIS,
+%%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%% See the License for the specific language governing permissions and
+%%% limitations under the License.
+%%%
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%%
-%%%   Copyright 2011-2013 Klarna AB
-%%%
-%%%   Licensed under the Apache License, Version 2.0 (the "License");
-%%%   you may not use this file except in compliance with the License.
-%%%   You may obtain a copy of the License at
-%%%
-%%%       http://www.apache.org/licenses/LICENSE-2.0
-%%%
-%%%   Unless required by applicable law or agreed to in writing, software
-%%%   distributed under the License is distributed on an "AS IS" BASIS,
-%%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%%%   See the License for the specific language governing permissions and
-%%%   limitations under the License.
-%%%
 
 %%%_* Module declaration ===============================================
 -module(krc_server).
@@ -101,11 +99,7 @@
 
 %%%_* Includes =========================================================
 -include("krc.hrl").
--include_lib("tulib/include/assert.hrl").
--include_lib("tulib/include/logging.hrl").
--include_lib("tulib/include/metrics.hrl").
--include_lib("tulib/include/prelude.hrl").
--include_lib("tulib/include/types.hrl").
+-include_lib("stdlib2/include/prelude.hrl").
 
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
@@ -136,18 +130,19 @@ start_link(A)          -> gen_server:start_link(?MODULE, A, []).
 start_link(Name, A)    -> gen_server:start_link({local, Name}, ?MODULE, A, []).
 stop(GS)               -> gen_server:call(GS, stop).
 
-call(GS, Req) ->
-  gen_server:call(GS, {tulib_util:timestamp(), Req}, ?CALL_TIMEOUT).
+call(GS, Req)          -> gen_server:call(GS,
+                                          {s2_time:stamp(), Req},
+                                          ?CALL_TIMEOUT).
 
 %%%_ * gen_server callbacks --------------------------------------------
 init(Args) ->
   process_flag(trap_exit, true),
-  Client   = tulib_util:get_arg(client,    Args, krc_pb_client, ?APP),
-  IP       = tulib_util:get_arg(riak_ip,   Args, "127.0.0.1",   ?APP),
-  Port     = tulib_util:get_arg(riak_port, Args, 8081,          ?APP),
-  PoolSize = tulib_util:get_arg(pool_size, Args, 5,             ?APP),
+  Client   = s2_env:get_arg(Args, ?APP, client,    krc_pb_client),
+  IP       = s2_env:get_arg(Args, ?APP, riak_ip,   "127.0.0.1"),
+  Port     = s2_env:get_arg(Args, ?APP, riak_port, 8081),
+  PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
   Pids     = [connection_start(Client, IP, Port) ||
-               _ <- tulib_lists:seq(PoolSize)],
+               _ <- lists:seq(1, PoolSize)],
   {ok, #s{client=Client, ip=IP, port=Port, pids=Pids}}.
 
 terminate(_, #s{}) -> ok.
@@ -155,7 +150,7 @@ terminate(_, #s{}) -> ok.
 code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
-  {stop, stopped, ok, S};
+  {stop, stopped, ok, S}; %workers linked
 handle_call(Req, From, #s{pids=[Pid|Pids]} = S) ->
   Pid ! {handle, Req, From},
   {noreply, S#s{pids=Pids ++ [Pid]}}. %round robin
@@ -197,7 +192,7 @@ connection_start(Client, IP, Port) ->
 connection(Client, Pid) ->
   receive
     {handle, {TS, Req}, {Caller, _} = From} ->
-      case {tulib_processes:is_up(Caller), time_left(TS)} of
+      case {s2_procs:is_up(Caller), time_left(TS)} of
         {true, true} ->
           case ?lift(do(Client, Pid, Req)) of
             {error, disconnected} = Err ->
@@ -236,7 +231,7 @@ connection(Client, Pid) ->
   end.
 
 time_left(T0) ->
-  T1        = tulib_util:timestamp(),
+  T1        = s2_time:stamp(),
   ElapsedMs = (T1 - T0) / 1000,
   (ElapsedMs + ?TIMEOUT) < ?CALL_TIMEOUT.
 
@@ -305,8 +300,8 @@ client_down_test() ->
     Pids = krc_test:spawn_async(10, ?thunk(put_req())), %Fill queue
     [P]  = krc_test:spawn_async(?thunk(timer:sleep(10), put_req())),
     timer:sleep(20),
-    tulib_processes:kill(P, [unlink]), %\ Request
-    krc_test:sync(Pids))).             %/ dropped
+    s2_procs:kill(P, [unlink]), %\ Request
+    krc_test:sync(Pids))).      %/ dropped
 
 out_of_time_test() ->
   krc_test:with_mock([{pool_size, 1}], ?thunk(
