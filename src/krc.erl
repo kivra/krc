@@ -30,6 +30,7 @@
         , get/4
         , get_index/4
         , get_index/5
+        , get_index_keys/4
         , put/2
         , put_index/3
         ]).
@@ -92,7 +93,7 @@ get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
                    maybe([obj()], _).
 -spec get_index(server(), bucket(), idx(), idx_key(), strategy()) ->
                    maybe([obj()], _).
-%% @doc Get all objects tagged with Idx in bucket B.
+%% @doc Get all objects tagged with I in bucket B.
 get_index(S, B, I, K) ->
   get_index(S, B, I, K, krc_policy_default).
 get_index(S, B, I, K, Strat) ->
@@ -104,6 +105,16 @@ get_index(S, B, I, K, Strat) ->
   s2_par:map(fun(Key) -> get(S, B, Key, Strat) end,
              Keys,
              [{errors, false}, {chunksize, 100}]).
+
+
+-spec get_index_keys(server(), bucket(), idx(), idx_key()) ->
+                        maybe([key()], _).
+%% @doc Get all keys tagged with I in bucket B.
+get_index_keys(S, B, I, K) ->
+  case K of
+    {match, X}    -> krc_server:get_index(S, B, I, X);
+    {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
+  end.
 
 
 -spec put(server(), obj()) -> whynot(_).
