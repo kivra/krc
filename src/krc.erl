@@ -35,8 +35,7 @@
         ]).
 
 %% Args
--export_type([ resolver/0
-             , server/0
+-export_type([ server/0
              ]).
 
 %%%_* Includes =========================================================
@@ -47,7 +46,8 @@
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -type server()   :: atom() | pid().
--type resolver() :: fun((A, A) -> A).
+-type strategy() :: module() %policy
+                  | krc_resolver:resolution_procedure().
 
 -type bucket()   :: krc_obj:bucket().
 -type key()      :: krc_obj:key().
@@ -62,20 +62,14 @@ delete(S, B, K) -> krc_server:delete(S, B, K).
 
 
 -spec get(server(), bucket(), key())             -> maybe(obj(), _).
--spec get(server(), bucket(), key(), resolver()) -> maybe(obj(), _).
+-spec get(server(), bucket(), key(), strategy()) -> maybe(obj(), _).
 %% @doc Fetch the object associated with K in B.
-get(S, B, K)    -> get(S, B, K, defaulty()).
-get(S, B, K, F) -> get_loop(S, B, K, wrap(F)).
-
-defaulty() -> fun(V1, V2) -> throw({defaulty, V1, V2}) end.
-
-wrap(F) ->
-  fun(V1, V2) ->
-    case ?lift(F(V1, V2)) of
-      {ok, _} = Ok -> Ok;
-      {error, Rsn} -> {error, {conflict, V1, V2, Rsn}}
-    end
-  end.
+get(S, B, K) ->
+  get(S, B, K, krc_policy_default).
+get(S, B, K, Policy) when is_atom(Policy) ->
+  get(S, B, K, krc_resolver:compose(Policy:lookup(B, K)));
+get(S, B, K, F) when is_function(F) ->
+  get_loop(S, B, K, F).
 
 get_loop(S, B, K, F) ->
   get_loop(1, get_tries(), S, B, K, F).
@@ -95,14 +89,14 @@ get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
 
 -spec get_index(server(), bucket(), idx(), idx_key()) ->
                    maybe([obj()], _).
--spec get_index(server(), bucket(), idx(), idx_key(), resolver()) ->
+-spec get_index(server(), bucket(), idx(), idx_key(), strategy()) ->
                    maybe([obj()], _).
 %% @doc Get all objects tagged with Idx in bucket B.
 get_index(S, B, I, K) ->
-  get_index(S, B, I, K, defaulty()).
-get_index(S, B, I, K, F) when is_function(F, 2) ->
+  get_index(S, B, I, K, krc_policy_default).
+get_index(S, B, I, K, Strat) ->
   {ok, Keys} = krc_server:get_index(S, B, I, K),
-  s2_par:map(fun(Key) -> get(S, B, Key, F) end,
+  s2_par:map(fun(Key) -> get(S, B, Key, Strat) end,
              Keys,
              [{errors, false}, {chunksize, 100}]).
 
