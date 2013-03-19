@@ -81,6 +81,7 @@
 -export([ delete/3
         , get/3
         , get_index/4
+        , get_index/5
         , put/2
         ]).
 
@@ -119,20 +120,19 @@
         }).
 
 %%%_ * API -------------------------------------------------------------
-delete(GS, B, K)       -> call(GS, {delete,    [B, K]   }).
-get(GS, B, K)          -> call(GS, {get,       [B, K]   }).
-get_index(GS, B, I, K) -> call(GS, {get_index, [B, I, K]}).
-put(GS, O)             -> call(GS, {put,       [O]      }).
+delete(GS, B, K)          -> call(GS, {delete,    [B, K]   }).
+get(GS, B, K)             -> call(GS, {get,       [B, K]   }).
+get_index(GS, B, I, K)    -> call(GS, {get_index, [B, I, K]}).
+get_index(GS, B, I, L, U) -> call(GS, {get_index, [B, I, L, U]}).
+put(GS, O)                -> call(GS, {put,       [O]      }).
 
-start(A)               -> gen_server:start(?MODULE, A, []).
-start(Name, A)         -> gen_server:start({local, Name}, ?MODULE, A, []).
-start_link(A)          -> gen_server:start_link(?MODULE, A, []).
-start_link(Name, A)    -> gen_server:start_link({local, Name}, ?MODULE, A, []).
-stop(GS)               -> gen_server:call(GS, stop).
+start(A)            -> gen_server:start(?MODULE, A, []).
+start(Name, A)      -> gen_server:start({local, Name}, ?MODULE, A, []).
+start_link(A)       -> gen_server:start_link(?MODULE, A, []).
+start_link(Name, A) -> gen_server:start_link({local, Name}, ?MODULE, A, []).
+stop(GS)            -> gen_server:call(GS, stop).
 
-call(GS, Req)          -> gen_server:call(GS,
-                                          {s2_time:stamp(), Req},
-                                          ?CALL_TIMEOUT).
+call(GS, Req) -> gen_server:call(GS, {s2_time:stamp(), Req}, ?CALL_TIMEOUT).
 
 %%%_ * gen_server callbacks --------------------------------------------
 init(Args) ->
