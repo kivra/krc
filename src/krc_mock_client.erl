@@ -30,6 +30,7 @@
 -export([ delete/5
         , get/5
         , get_index/5
+        , get_index/6
         , put/4
         , start_link/3
         ]).
@@ -74,10 +75,11 @@ connect()    -> gen_server:call(?MODULE, connect).
 disconnect() -> gen_server:call(?MODULE, disconnect).
 
 %%%_ * riak_client callbacks -------------------------------------------
-delete(P, B, K, Os, T)   -> call(P, {delete,    [B, K, Os, T]}).
-get(P, B, K, Os, T)      -> call(P, {get,       [B, K, Os, T]}).
-get_index(P, B, I, K, T) -> call(P, {get_index, [B, I, K, T] }).
-put(P, O, Os, T)         -> call(P, {put,       [O, Os, T]   }).
+delete(P, B, K, Os, T)      -> call(P, {delete,    [B, K, Os, T]  }).
+get(P, B, K, Os, T)         -> call(P, {get,       [B, K, Os, T]  }).
+get_index(P, B, I, K, T)    -> call(P, {get_index, [B, I, K, T]   }).
+get_index(P, B, I, L, U, T) -> call(P, {get_index, [B, I, L, U, T]}).
+put(P, O, Os, T)            -> call(P, {put,       [O, Os, T]     }).
 
 %% Simulate Riak timeout via gen_server timeout.
 call(Pid, {_F, A} = Req) ->
@@ -123,6 +125,18 @@ do(get, [B, K, _, _], #s{tabs=Tabs} = S) ->
 do(get_index, [B, I, K, _], #s{idxs=Idxs} = S) ->
   {S, case s2_maps:get(Idxs, [B, I, K]) of
         {ok, _} = Ok      -> Ok;
+        {error, notfound} -> {ok, []}
+      end};
+do(get_index, [B, I, L, U, _], #s{idxs=Idxs} = S) ->
+  {S, case s2_maps:get(Idxs, [B, I]) of
+        {ok, Dict} ->
+          lists:foldl(
+            fun(K, Acc) ->
+              case s2_maps:get(Idxs, [B, I, K]) of
+                {ok, Keys}        -> Keys ++ Acc;
+                {error, notfound} -> Acc
+              end
+            end, [], [K || K <- dict:fetch_keys(Dict), L =< K, K =< U]);
         {error, notfound} -> {ok, []}
       end};
 do(put, [O, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
@@ -195,6 +209,23 @@ index_test() ->
   {ok, []}         = get_index(Pid, mah_bucket1, mah_idx2, mah_idxkey2, 1000),
   {ok, []}         = get_index(Pid, mah_bucket2, mah_idx1, mah_idxkey1, 1000),
   {ok, []}         = get_index(Pid, mah_bucket2, mah_idx2, mah_idxkey2, 1000),
+
+  stop().
+
+range_test() ->
+  {ok, Pid}        = start(),
+
+  ObjA0            = krc_obj:new(mah_bucket1, mah_key1, mah_val1),
+  Indices          = [ {mah_idx1, 10}
+                     ],
+  ObjA             = krc_obj:set_indices(ObjA0, Indices),
+  ok               = put(Pid, ObjA, [], 1000),
+
+  {ok, []}         = get_index(Pid, mah_bucket1, mah_idx1, 0,  5,  1000),
+  {ok, [mah_key1]} = get_index(Pid, mah_bucket1, mah_idx1, 5,  10, 1000),
+  {ok, [mah_key1]} = get_index(Pid, mah_bucket1, mah_idx1, 10, 20, 1000),
+  ok               = delete(Pid, mah_bucket1, mah_key1, [], 1000),
+  {ok, []}         = get_index(Pid, mah_bucket1, mah_idx1, 0, 20, 1000),
 
   stop().
 

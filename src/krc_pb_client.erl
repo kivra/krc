@@ -27,6 +27,7 @@
 -export([ delete/5
         , get/5
         , get_index/5
+        , get_index/6
         , put/4
         , start_link/3
         ]).
@@ -54,11 +55,28 @@ get(Pid, Bucket, Key, Options, Timeout) ->
   end.
 
 get_index(Pid, Bucket, Index, Key, Timeout) ->
+  {Idx, IdxKey} = krc_obj:encode_index({Index, Key}),
   case
     riakc_pb_socket:get_index(Pid,
                               krc_obj:encode(Bucket),
-                              krc_obj:encode_idx(Index),
-                              krc_obj:encode_idx_key(Key),
+                              Idx,
+                              IdxKey,
+                              Timeout,
+                              infinity) %gen_server call
+  of
+    {ok, Keys}       -> {ok, [krc_obj:decode(K) || K <- Keys]};
+    {error, _} = Err -> Err
+  end.
+
+get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
+  {Idx, LowerKey} = krc_obj:encode_index({Index, Lower}),
+  {Idx, UpperKey} = krc_obj:encode_index({Index, Upper}),
+  case
+    riakc_pb_socket:get_index(Pid,
+                              krc_obj:encode(Bucket),
+                              Idx,
+                              LowerKey,
+                              UpperKey,
                               Timeout,
                               infinity) %gen_server call
   of

@@ -30,6 +30,7 @@
         , get/4
         , get_index/4
         , get_index/5
+        , get_index_keys/4
         , put/2
         , put_index/3
         ]).
@@ -52,7 +53,8 @@
 -type bucket()   :: krc_obj:bucket().
 -type key()      :: krc_obj:key().
 -type idx()      :: krc_obj:idx().
--type idx_key()  :: krc_obj:idx_key().
+-type idx_key()  :: {match, _}
+                  | {range, integer(), integer()}.
 -type obj()      :: krc_obj:ect().
 
 %%%_ * API -------------------------------------------------------------
@@ -91,14 +93,28 @@ get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
                    maybe([obj()], _).
 -spec get_index(server(), bucket(), idx(), idx_key(), strategy()) ->
                    maybe([obj()], _).
-%% @doc Get all objects tagged with Idx in bucket B.
+%% @doc Get all objects tagged with I in bucket B.
 get_index(S, B, I, K) ->
   get_index(S, B, I, K, krc_policy_default).
 get_index(S, B, I, K, Strat) ->
-  {ok, Keys} = krc_server:get_index(S, B, I, K),
+  {ok, Keys} =
+    case K of
+      {match, X}    -> krc_server:get_index(S, B, I, X);
+      {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
+    end,
   s2_par:map(fun(Key) -> get(S, B, Key, Strat) end,
              Keys,
              [{errors, false}, {chunksize, 100}]).
+
+
+-spec get_index_keys(server(), bucket(), idx(), idx_key()) ->
+                        maybe([key()], _).
+%% @doc Get all keys tagged with I in bucket B.
+get_index_keys(S, B, I, K) ->
+  case K of
+    {match, X}    -> krc_server:get_index(S, B, I, X);
+    {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
+  end.
 
 
 -spec put(server(), obj()) -> whynot(_).
@@ -171,14 +187,14 @@ basic_index_test() ->
     Idx        = {I, IK},
     ok         = put_index(krc_server, Obj1, [Idx]),
     ok         = put_index(krc_server, Obj2, [Idx]),
-    {ok, Objs} = get_index(krc_server, B, I, IK),
+    {ok, Objs} = get_index(krc_server, B, I, {match, IK}),
     true       = s2_lists:is_permutation([V1, V2], vals(Objs))
   end).
 
 empty_index_test() ->
   krc_test:with_pb(1, fun(Inputs) ->
     [{B, _, I, IK, _}] = Inputs,
-    {ok, []}           = get_index(krc_server, B, I, IK)
+    {ok, []}           = get_index(krc_server, B, I, {match, IK})
   end).
 
 multiple_indices_test() ->
@@ -199,10 +215,10 @@ multiple_indices_test() ->
     ok          = put_index(krc_server, Obj3, [Idx1, Idx2]),
     ok          = put_index(krc_server, Obj4, [Idx1, Idx2]),
 
-    {ok, Objs1} = get_index(krc_server, B1, I1, IK1),
-    {ok, Objs2} = get_index(krc_server, B1, I2, IK2),
-    {ok, Objs3} = get_index(krc_server, B2, I1, IK1),
-    {ok, Objs4} = get_index(krc_server, B2, I2, IK2),
+    {ok, Objs1} = get_index(krc_server, B1, I1, {match, IK1}),
+    {ok, Objs2} = get_index(krc_server, B1, I2, {match, IK2}),
+    {ok, Objs3} = get_index(krc_server, B2, I1, {match, IK1}),
+    {ok, Objs4} = get_index(krc_server, B2, I2, {match, IK2}),
 
     true        = s2_lists:is_permutation(vals(Objs1), [V1, V2]),
     true        = s2_lists:is_permutation(vals(Objs2), [V1, V2]),
@@ -222,8 +238,41 @@ index_get_error_test() ->
     ok           = put_index(krc_server, Obj1, [Idx]),
     ok           = put_index(krc_server, Obj2, [Idx]),
     ok           = put(krc_server, krc_obj:set_val(Obj2, V3)), %conflict
-    {error, Rsn} = get_index(krc_server, B, I, IK),
+    {error, Rsn} = get_index(krc_server, B, I, {match, IK}),
     {worker, _}  = Rsn
+  end).
+
+range_index_test() ->
+  krc_test:with_pb(3, fun(Inputs) ->
+    [ {B, K1, I, _, V1}
+    , {_, K2, _, _, V2}
+    , {_, K3, _, _, V3}
+    ]            = Inputs,
+    Obj1         = krc_obj:new(B, K1, V1),
+    Obj2         = krc_obj:new(B, K2, V2),
+    Obj3         = krc_obj:new(B, K3, V3),
+    Idx1         = {I, 5},
+    Idx2         = {I, 10},
+    Idx3         = {I, 20},
+    ok           = put_index(krc_server, Obj1, [Idx1]),
+    ok           = put_index(krc_server, Obj2, [Idx2]),
+    ok           = put_index(krc_server, Obj3, [Idx3]),
+
+    {ok, Objs1}  = get_index(krc_server, B, I, {range, 5, 20}),
+    true         = s2_lists:is_permutation([V1, V2, V3], vals(Objs1)),
+
+    {ok, []}     = get_index(krc_server, B, I, {range, 0, 4}),
+
+    {ok, Objs2}  = get_index(krc_server, B, I, {range, 5, 5}),
+    true         = s2_lists:is_permutation([V1], vals(Objs2)),
+
+    {ok, Objs3}  = get_index(krc_server, B, I, {range, 5, 10}),
+    true         = s2_lists:is_permutation([V1, V2], vals(Objs3)),
+
+    {ok, Objs4}  = get_index(krc_server, B, I, {range, 15, 20}),
+    true         = s2_lists:is_permutation([V3], vals(Objs4)),
+
+    {ok, []}     = get_index(krc_server, B, I, {range, 21, 30})
   end).
 
 conflict_ok_test() ->
