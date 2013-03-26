@@ -109,7 +109,7 @@ is_indices(I)                -> lists:all(fun is_idx/1, I).
 is_idx({_, _})               -> true;
 is_idx(_)                    -> false.
 
-is_metadata(M)               -> lists:all(fun is_metadata/1, M).
+is_metadata(M)               -> lists:all(fun is_md/1, M).
 
 is_md({?MD_CTYPE, ?CTYPE_ERLANG_BINARY}) -> true;
 is_md({?MD_VTAG,  _})                    -> true;
@@ -292,6 +292,16 @@ enc_dec_idx_key_test() ->
   X = decode_bin_key(encode_bin_key(X)),
   Y = 123,
   Y = decode_int_key(encode_int_key(Y)).
+
+metadata_test() ->
+  KrcObj0       = new(foo, bar, baz),
+  KrcObj1       = set_metadata(KrcObj0, [{?MD_LASTMOD, {1,2,3}}]),
+  RiakcObj      = to_riakc_obj(KrcObj1),
+  MD0           = riakc_obj:get_metadata(RiakcObj),
+  {1, 2, 3}     = dict:fetch(?MD_LASTMOD, MD0),
+  {ok, KrcObj2} = resolve(from_riakc_obj(RiakcObj), resolver()),
+  MD1           = metadata(KrcObj2),
+  {ok, {1,2,3}} = s2_lists:assoc(MD1, ?MD_LASTMOD).
 
 coverage_test() ->
   Obj        = new(foo, bar, baz),
