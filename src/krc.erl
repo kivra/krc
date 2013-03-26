@@ -31,6 +31,7 @@
         , get_index/4
         , get_index/5
         , get_index_keys/4
+	, mapred_bucket/3
         , put/2
         , put_index/3
         ]).
@@ -116,6 +117,9 @@ get_index_keys(S, B, I, K) ->
     {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
   end.
 
+%% @ doc mapred over bucket-key list I with query Q.
+mapred(S, I, Q) ->
+  krc_server:mapred(S, I, Q).
 
 -spec put(server(), obj()) -> whynot(_).
 %% @doc Store O.
@@ -273,6 +277,18 @@ range_index_test() ->
     true         = s2_lists:is_permutation([V3], vals(Objs4)),
 
     {ok, []}     = get_index(krc_server, B, I, {range, 21, 30})
+  end).
+
+mapred_test() ->
+  krc_test:with_pb(1, fun(Inputs) ->
+			  {ok, Res} = mapred(krc_server,
+					     [{b1,k1},
+					      {b2,k2}],
+					     [{map, {qfun, Count}, none, false},
+					      {reduce, {qfun, Merge}, none, true}
+					     ]),
+
+    ok
   end).
 
 conflict_ok_test() ->
