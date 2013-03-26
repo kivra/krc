@@ -43,9 +43,11 @@
         , val/1
         , indices/1
         , vclock/1
+	, metadata/1
         , set_bucket/2
         , set_val/2
         , set_indices/2
+	, set_metadata/2
         ]).
 
 -export_type([ bucket/0
@@ -53,6 +55,7 @@
              , idx/0
              , idx_key/0
              , indices/0
+	     , metadata/0
              , key/0
              ]).
 
@@ -70,6 +73,9 @@
 -type idx()                  :: _.
 -type idx_key()              :: _.
 -type indices()              :: [{idx(), idx_key()}].
+-type metadata_key()         :: _.
+-type metadata_val()         :: _.
+-type metadata()             :: [{metadata_key(), metadata_val()}].
 
 %% #krc_obj.vclock is set to undefined; this is compatible with
 %% riakc_obj.erl (by inspection in late 2011).
@@ -79,6 +85,7 @@
         , val                :: val()     %/
         , indices=[]         :: indices() %KRC specific
         , vclock=undefined   :: _         %Riak internal
+	, metadata           :: _         %Riak internal allowed
         }).
 
 -opaque ect()                :: #krc_obj{}.
@@ -91,14 +98,24 @@ key(#krc_obj{key=K})         -> K.
 val(#krc_obj{val=V})         -> V.
 indices(#krc_obj{indices=I}) -> I.
 vclock(#krc_obj{vclock=C})   -> C.
+metadata(#krc_obj{metadata=M}) -> M.
 
 set_bucket(Obj, B)           -> Obj#krc_obj{bucket=B}.
 set_val(Obj, V)              -> Obj#krc_obj{val=V}.
-set_indices(Obj, I)          -> ?hence(is_indices(I)), Obj#krc_obj{indices=I}.
+set_indices(Obj, I)          -> ?hence(is_indices(I)),  Obj#krc_obj{indices=I}.
+set_metadata(Obj, M)         -> ?hence(is_metadata(M)), Obj#krc_obj{metadata=M}.
 
 is_indices(I)                -> lists:all(fun is_idx/1, I).
 is_idx({_, _})               -> true;
 is_idx(_)                    -> false.
+
+is_metadata(M)               -> lists:all(fun is_metadata/1, M).
+
+is_md({?MD_CTYPE, ?CTYPE_ERLANG_BINARY}) -> true;
+is_md({?MD_VTAG,  _})                    -> true;
+is_md({?MD_LASTMOD, {_,_,_}})            -> true;
+is_md({?MD_DELETED, _})                  -> true;
+is_md(_)                                 -> false.
 
 %%%_ * KRC<->riakc -----------------------------------------------------
 %% Since the Riak PB client doesn't have an API for adding indices, we
@@ -120,20 +137,20 @@ is_idx(_)                    -> false.
 -type riakc_obj() :: _. %#riakc_obj{}
 
 -spec to_riakc_obj(ect()) -> riakc_obj().
-to_riakc_obj(#krc_obj{bucket=B, key=K, indices=I, val=V, vclock=C}) ->
-  riakc_obj:new_obj(encode(B), encode(K), C, [{encode_indices(I), encode(V)}]).
-
+to_riakc_obj(#krc_obj{bucket=B, key=K, indices=I, metadata=M, val=V, vclock=C}) ->
+  riakc_obj:new_obj(encode(B), encode(K), C, [{metadata(M, I), encode(V)}]).
 
 -spec from_riakc_obj(riakc_obj()) -> ect() | no_return().
 %% Siblings need to be resolved separately.
 from_riakc_obj(Obj) ->
   {riakc_obj, _, _, _, _, undefined, undefined} = Obj, %assert
   Contents = riakc_obj:get_contents(Obj),
-  #krc_obj{ bucket  = decode(riakc_obj:bucket(Obj))
-          , key     = decode(riakc_obj:key(Obj))
-          , val     = [decode(V) || {_, V} <- Contents]
-          , indices = [decode_indices(MD) || {MD, _} <- Contents]
-          , vclock  = riakc_obj:vclock(Obj) %opaque
+  #krc_obj{ bucket   = decode(riakc_obj:bucket(Obj))
+          , key      = decode(riakc_obj:key(Obj))
+          , val      = [decode(V) || {_, V} <- Contents]
+          , indices  = [decode_indices(MD) || {MD, _} <- Contents]
+          , vclock   = riakc_obj:vclock(Obj) %opaque
+	  , metadata = [filter_metadata(MD) || {MD, _} <- Contents]
           }.
 
 
@@ -153,6 +170,19 @@ decode_indices(MD) ->
     error   -> []
   end.
 
+%% Build metadata dict
+metadata(M, I) ->
+  ?hence(is_metadata(M)),
+  lists:foldl(fun({K,V}, MD) ->
+		  dict:store(K, V, MD)
+	      end, encode_indices(I), M).
+
+%% Very permissive in what we allow on read, we prefer to crash on
+%% write if not allowed keys are used.
+filter_metadata(MD) ->
+  lists:filter(fun({?MD_INDEX, _}) -> false;
+		  (_)              -> true
+	       end, dict:to_list(MD)).
 
 %% @doc Resolve conflicts by taking the union of all indices and
 %% computing the LUB of all values under F.
