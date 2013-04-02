@@ -38,8 +38,11 @@
 %%%_* Code =============================================================
 delete(Pid, Bucket, Key, Options, Timeout) ->
   case
-    riakc_pb_socket:delete(
-      Pid, krc_obj:encode(Bucket), krc_obj:encode(Key), Options, Timeout)
+    riakc_pb_socket:delete(Pid,
+			   krc_obj:encode_key(Bucket),
+			   krc_obj:encode_key(Key),
+			   Options,
+			   Timeout)
   of
     ok               -> ok;
     {error, _} = Err -> Err
@@ -47,8 +50,11 @@ delete(Pid, Bucket, Key, Options, Timeout) ->
 
 get(Pid, Bucket, Key, Options, Timeout) ->
   case
-    riakc_pb_socket:get(
-      Pid, krc_obj:encode(Bucket), krc_obj:encode(Key), Options, Timeout)
+    riakc_pb_socket:get(Pid,
+			krc_obj:encode_key(Bucket),
+			krc_obj:encode_key(Key),
+			Options,
+			Timeout)
   of
     {ok, Obj}        -> {ok, krc_obj:from_riakc_obj(Obj)};
     {error, _} = Err -> Err
@@ -58,7 +64,7 @@ get_index(Pid, Bucket, Index, Key, Timeout) ->
   {Idx, IdxKey} = krc_obj:encode_index({Index, Key}),
   case
     riakc_pb_socket:get_index(Pid,
-                              krc_obj:encode(Bucket),
+                              krc_obj:encode_key(Bucket),
                               Idx,
                               IdxKey,
                               Timeout,
@@ -73,14 +79,14 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
   {Idx, UpperKey} = krc_obj:encode_index({Index, Upper}),
   case
     riakc_pb_socket:get_index(Pid,
-                              krc_obj:encode(Bucket),
+                              krc_obj:encode_key(Bucket),
                               Idx,
                               LowerKey,
                               UpperKey,
                               Timeout,
                               infinity) %gen_server call
   of
-    {ok, Keys}       -> {ok, [krc_obj:decode(K) || K <- Keys]};
+    {ok, Keys}       -> {ok, [krc_obj:decode_key(K) || K <- Keys]};
     {error, _} = Err -> Err
   end.
 

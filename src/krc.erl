@@ -80,7 +80,7 @@ get_loop(I, N, S, B, K, F) when N >= I ->
     {ok, Obj} ->
       krc_obj:resolve(Obj, F);
     {error, notfound} ->
-      ?info("{~p, ~p} not found, attempt ~p of ~p", [B, K, I, N]),
+      ?debug("{~p, ~p} not found, attempt ~p of ~p", [B, K, I, N]),
       ?increment([reads, retries]),
       timer:sleep(retry_wait_ms()),
       get_loop(I+1, N, S, B, K, F);
