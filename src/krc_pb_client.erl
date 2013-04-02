@@ -70,7 +70,7 @@ get_index(Pid, Bucket, Index, Key, Timeout) ->
                               Timeout,
                               infinity) %gen_server call
   of
-    {ok, Keys}       -> {ok, [krc_obj:decode(K) || K <- Keys]};
+    {ok, Keys}       -> {ok, [krc_obj:decode_key(K) || K <- Keys]};
     {error, _} = Err -> Err
   end.
 
