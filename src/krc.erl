@@ -28,11 +28,13 @@
 -export([ delete/3
         , get/3
         , get/4
+	, get_bucket/2
         , get_index/4
         , get_index/5
         , get_index_keys/4
         , put/2
         , put_index/3
+	, set_bucket/3
         ]).
 
 %% Args
@@ -88,6 +90,9 @@ get_loop(I, N, S, B, K, F) when N >= I ->
   end;
 get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
 
+-spec get_bucket(server(), bucket()) -> _.
+get_bucket(S, B) ->
+  krc_server:get_bucket(S, B).
 
 -spec get_index(server(), bucket(), idx(), idx_key()) ->
                    maybe([obj()], _).
@@ -121,11 +126,18 @@ get_index_keys(S, B, I, K) ->
 %% @doc Store O.
 put(S, O) -> krc_server:put(S, O).
 
-
 -spec put_index(server(), obj(), krc_obj:indices()) -> whynot(_).
 %% @doc Add O to Indices and store it.
 put_index(S, O, Indices) when is_list(Indices) ->
   krc_server:put(S, krc_obj:set_indices(O, Indices)).
+
+-spec set_bucket(server(), bucket(), _) -> _.
+%% @doc Set bucket properties P.
+set_bucket(S, B, P) ->
+  case krc_bucket_properties:valid(P) of
+    true  -> krc_server:set_bucket(S, B, P);
+    false -> {error, bad_propery}
+end.
 
 %%%_ * Internals -------------------------------------------------------
 %% @doc We automatically try to GET this many times.
@@ -175,6 +187,15 @@ delete_test() ->
     ok                = put(krc_server, Obj0),
     {ok, Obj}         = get(krc_server, B4, K4),
     true              = obj_eq(Obj0, Obj)
+  end).
+
+bucket_test() ->
+  krc_test:with_pb(1, fun(Inputs) ->
+    [{B, K, _, _, V}] = Inputs,
+      Precommit       = [{struct, [{<<"mod">>, foo}, {<<"fun">>, bar}]}],
+      ok              = set_bucket(krc_server, B, [{precommit, Precommit}]),
+      {ok, Props}     = get_bucket(krc_server, B),
+      {ok, Precommit} = s2_lists:assoc(precommit, Props)
   end).
 
 basic_index_test() ->
