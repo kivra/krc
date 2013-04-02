@@ -58,6 +58,7 @@
 -type idx_key()  :: {match, _}
                   | {range, integer(), integer()}.
 -type obj()      :: krc_obj:ect().
+-type props()    :: [{atom(),_}].
 
 %%%_ * API -------------------------------------------------------------
 -spec delete(server(), bucket(), key()) -> whynot(_).
@@ -90,7 +91,7 @@ get_loop(I, N, S, B, K, F) when N >= I ->
   end;
 get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
 
--spec get_bucket(server(), bucket()) -> _.
+-spec get_bucket(server(), bucket()) -> maybe(props(), _).
 get_bucket(S, B) ->
   krc_server:get_bucket(S, B).
 
@@ -131,13 +132,13 @@ put(S, O) -> krc_server:put(S, O).
 put_index(S, O, Indices) when is_list(Indices) ->
   krc_server:put(S, krc_obj:set_indices(O, Indices)).
 
--spec set_bucket(server(), bucket(), _) -> _.
+-spec set_bucket(server(), bucket(), props()) -> whynot(_).
 %% @doc Set bucket properties P.
 set_bucket(S, B, P) ->
-  case krc_bucket_properties:valid(P) of
-    true  -> krc_server:set_bucket(S, B, P);
-    false -> {error, bad_propery}
-end.
+  case krc_bucket_properties:encode(P) of
+    {ok, Props}      -> krc_server:set_bucket(S, B, Props);
+    {error, _} = Err -> Err
+  end.
 
 %%%_ * Internals -------------------------------------------------------
 %% @doc We automatically try to GET this many times.

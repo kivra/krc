@@ -17,44 +17,74 @@
 %%%
 %%% @end
 
-
 %%%_* Module declaration ===============================================
 -module(krc_bucket_properties).
 
 %%%_* Exports ==========================================================
--export([ valid/1
+-export([ encode/1
+	, decode/1
 	]).
 
 %%%_* Code =============================================================
 %%%_ * API -------------------------------------------------------------
-valid(Props) ->
-  lists:all(fun is_valid/1, Props).
+encode(Props) ->
+  case lists:all(fun is_valid/1, Props) of
+    true  -> {ok, lists:map(fun to_riakc_pb/1, Props)};
+    false -> {error, illegal_bucket_property}
+  end.
 
-%%%_ * Internals -------------------------------------------------------
-%% This is by no means a complete input validation.
-is_valid({n_val,           _N})          -> true;
-is_valid({allow_mult,      Flag})        -> is_boolean(Flag);
-is_valid({last_write_wins, Flag})        -> is_boolean(Flag);
-is_valid({precommit,       _Precommit})  -> true;
-is_valid({postcommit,      _Postcommit}) -> true;
-is_valid({chash_keyfun,    _ModFun})     -> true;
-is_valid({linkfun,         _ModFun})     -> true;
-is_valid({old_vclock,      _Num})        -> true;
-is_valid({young_vclock,    _Num})        -> true;
-is_valid({big_vclock,      _Num})        -> true;
-is_valid({small_vclock,    _Num})        -> true;
-is_valid({pr,              _Q})          -> true;
-is_valid({r,               _Q})          -> true;
-is_valid({w,               _Q})          -> true;
-is_valid({pw,              _Q})          -> true;
-is_valid({dw,              _Q})          -> true;
-is_valid({rw,              _Q})          -> true;
-is_valid({basic_quorum,    _BQ})         -> true;
-is_valid({notfound_ok,     Flag})        -> is_boolean(Flag);
-is_valid({backend,         _B})          -> true;
-is_valid({search,          Flag})        -> is_boolean(Flag);
-is_valid({repl,            _Atom})       -> true;
-is_valid(_)                              -> false.
+decode(Props) ->
+  lists:map(fun from_riakc_pb/1, Props).
+
+%%%_ * Internals encode/input validation -------------------------------
+is_valid({n_val,           N})     -> is_integer(N) andalso N > 0;
+is_valid({allow_mult,      Flag})  -> is_boolean(Flag);
+is_valid({last_write_wins, Flag})  -> is_boolean(Flag);
+is_valid({precommit,       Hooks}) -> commit_hooks(Hooks);
+is_valid({postcommit,      Hooks}) -> commit_hooks(Hooks);
+is_valid({pr,              Q})     -> n_val(Q);
+is_valid({r,               Q})     -> n_val(Q);
+is_valid({w,               Q})     -> n_val(Q);
+is_valid({pw,              Q})     -> n_val(Q);
+is_valid({dw,              Q})     -> n_val(Q);
+is_valid({rw,              Q})     -> n_val(Q);
+is_valid({basic_quorum,    Flag})  -> is_boolean(Flag);
+is_valid({notfound_ok,     Flag})  -> is_boolean(Flag);
+is_valid({backend,         _B})    -> true;
+is_valid(_)                        -> false.
+%% Existing but not implemented.
+%% is_valid({chash_keyfun,    _ModFun})     -> true;
+%% is_valid({linkfun,         _ModFun})     -> true;
+%% is_valid({old_vclock,      _Num})        -> true;
+%% is_valid({young_vclock,    _Num})        -> true;
+%% is_valid({big_vclock,      _Num})        -> true;
+%% is_valid({small_vclock,    _Num})        -> true;
+%%is_valid({search,          Flag})        -> is_boolean(Flag);
+%%is_valid({repl,            _Atom})       -> true;
+
+commit_hooks([])        -> true;
+commit_hooks([{M,F}|T])
+  when is_atom(M)
+     , is_atom(F)       -> commit_hooks(T);
+commit_hooks(_)         -> false.
+
+n_val(all)                  -> true;
+n_val(quorum)               -> true;
+n_val(one)                  -> true;
+n_val(N) when is_integer(N) -> N > 0;
+n_val(_)                    -> false.
+
+%%%_ * Internals encode ------------------------------------------------
+to_riakc_pb({precommit,  Hooks}) -> encode_hooks(Hooks);
+to_riakc_pb({postcommit, Hooks}) -> encode_hooks(Hooks);
+to_riakc_pb(Opt)                 -> Opt.
+
+encode_hooks(Hooks) ->
+  [{struct, [{<<"mod">>, M}, {<<"fun">>, F}]} || {M,F} <- Hooks].
+
+%%%_ * Internals decode ------------------------------------------------
+%% TODO
+from_riakc_pb(Opt) -> Opt.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
