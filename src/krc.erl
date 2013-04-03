@@ -31,7 +31,7 @@
         , get_index/4
         , get_index/5
         , get_index_keys/4
-	, mapred_bucket/3
+	, mapred/3
         , put/2
         , put_index/3
         ]).
@@ -57,6 +57,16 @@
 -type idx_key()  :: {match, _}
                   | {range, integer(), integer()}.
 -type obj()      :: krc_obj:ect().
+
+-type mapred_funterm() :: {modfun, Mod :: atom(), Fun :: atom()} |
+			    {qfun, function()}.
+
+-type mapred_input()   :: [{bucket(), key()} |
+			   {{bucket(), key()}, term()}].
+-type mapred_query()   :: [{map, mapred_funterm(), Arg :: term(),
+			    Keep :: boolean()} |
+			   {reduce, mapred_funterm(), Arg :: term(),
+			    Keep :: boolean()}].
 
 %%%_ * API -------------------------------------------------------------
 -spec delete(server(), bucket(), key()) -> whynot(_).
@@ -117,6 +127,7 @@ get_index_keys(S, B, I, K) ->
     {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
   end.
 
+-spec mapred(server(), mapred_input(), mapred_query()) -> maybe([term()], _).
 %% @ doc mapred over bucket-key list I with query Q.
 mapred(S, I, Q) ->
   krc_server:mapred(S, I, Q).

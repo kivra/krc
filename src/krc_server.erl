@@ -245,6 +245,7 @@ do(Client, Pid, {F, A}) ->
 opts(delete)    -> [dopts()];
 opts(get)       -> [ropts()];
 opts(get_index) -> [];
+opts(mapred)    -> [];
 opts(put)       -> [wopts()].
 
 %%%_  * Config ---------------------------------------------------------
