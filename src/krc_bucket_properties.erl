@@ -37,17 +37,19 @@ decode(Props) ->
   lists:map(fun from_riakc_pb/1, Props).
 
 %%%_ * Internals encode/input validation -------------------------------
+%% This is not a complete input validation but a precheck before
+%% handing over the request.
 is_valid({n_val,           N})     -> is_integer(N) andalso N > 0;
 is_valid({allow_mult,      Flag})  -> is_boolean(Flag);
 is_valid({last_write_wins, Flag})  -> is_boolean(Flag);
-is_valid({precommit,       Hooks}) -> commit_hooks(Hooks);
-is_valid({postcommit,      Hooks}) -> commit_hooks(Hooks);
-is_valid({pr,              Q})     -> n_val(Q);
-is_valid({r,               Q})     -> n_val(Q);
-is_valid({w,               Q})     -> n_val(Q);
-is_valid({pw,              Q})     -> n_val(Q);
-is_valid({dw,              Q})     -> n_val(Q);
-is_valid({rw,              Q})     -> n_val(Q);
+is_valid({precommit,       Hooks}) -> is_commit_hooks(Hooks);
+is_valid({postcommit,      Hooks}) -> is_commit_hooks(Hooks);
+is_valid({pr,              Q})     -> is_n_val(Q);
+is_valid({r,               Q})     -> is_n_val(Q);
+is_valid({w,               Q})     -> is_n_val(Q);
+is_valid({pw,              Q})     -> is_n_val(Q);
+is_valid({dw,              Q})     -> is_n_val(Q);
+is_valid({rw,              Q})     -> is_n_val(Q);
 is_valid({basic_quorum,    Flag})  -> is_boolean(Flag);
 is_valid({notfound_ok,     Flag})  -> is_boolean(Flag);
 is_valid({backend,         _B})    -> true;
@@ -59,32 +61,44 @@ is_valid(_)                        -> false.
 %% is_valid({young_vclock,    _Num})        -> true;
 %% is_valid({big_vclock,      _Num})        -> true;
 %% is_valid({small_vclock,    _Num})        -> true;
-%%is_valid({search,          Flag})        -> is_boolean(Flag);
-%%is_valid({repl,            _Atom})       -> true;
+%% is_valid({search,          Flag})        -> is_boolean(Flag);
+%% is_valid({repl,            _Atom})       -> true;
 
-commit_hooks([])        -> true;
-commit_hooks([{M,F}|T])
+is_commit_hooks([])        -> true;
+is_commit_hooks([{M,F}|T])
   when is_atom(M)
-     , is_atom(F)       -> commit_hooks(T);
-commit_hooks(_)         -> false.
+     , is_atom(F)          -> is_commit_hooks(T);
+is_commit_hooks(_)         -> false.
 
-n_val(all)                  -> true;
-n_val(quorum)               -> true;
-n_val(one)                  -> true;
-n_val(N) when is_integer(N) -> N > 0;
-n_val(_)                    -> false.
+is_n_val(all)                  -> true;
+is_n_val(quorum)               -> true;
+is_n_val(one)                  -> true;
+is_n_val(N) when is_integer(N) -> N > 0;
+is_n_val(_)                    -> false.
 
-%%%_ * Internals encode ------------------------------------------------
-to_riakc_pb({precommit,  Hooks}) -> encode_hooks(Hooks);
-to_riakc_pb({postcommit, Hooks}) -> encode_hooks(Hooks);
+to_riakc_pb({precommit,  Hooks}) -> {precommit,  encode_hooks(Hooks)};
+to_riakc_pb({postcommit, Hooks}) -> {postcommit, encode_hooks(Hooks)};
 to_riakc_pb(Opt)                 -> Opt.
 
 encode_hooks(Hooks) ->
-  [{struct, [{<<"mod">>, M}, {<<"fun">>, F}]} || {M,F} <- Hooks].
+  lists:map(fun({Mod,Fun}) ->
+		M = list_to_binary(atom_to_list(Mod)),
+		F = list_to_binary(atom_to_list(Fun)),
+		{struct, [{<<"mod">>, M}, {<<"fun">>, F}]}
+	    end, Hooks).
 
 %%%_ * Internals decode ------------------------------------------------
-%% TODO
-from_riakc_pb(Opt) -> Opt.
+from_riakc_pb({precommit,  Hooks}) -> {precommit,  decode_hooks(Hooks)};
+from_riakc_pb({postcommit, Hooks}) -> {postcommit, decode_hooks(Hooks)};
+from_riakc_pb(Opt)                 -> Opt.
+
+decode_hooks(Hooks) ->
+  lists:map(fun({struct, Props}) ->
+		{ok, M} = s2_lists:assoc(Props, <<"mod">>),
+		{ok, F} = s2_lists:assoc(Props, <<"fun">>),
+		{list_to_atom(binary_to_list(M)),
+		 list_to_atom(binary_to_list(F))}
+	    end, Hooks).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).

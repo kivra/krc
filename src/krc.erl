@@ -192,11 +192,14 @@ delete_test() ->
 
 bucket_test() ->
   krc_test:with_pb(1, fun(Inputs) ->
-    [{B, K, _, _, V}] = Inputs,
-      Precommit       = [{struct, [{<<"mod">>, foo}, {<<"fun">>, bar}]}],
-      ok              = set_bucket(krc_server, B, [{precommit, Precommit}]),
+    [{B, _K, _, _, _V}] = Inputs,
+      N               = 9,
+      Precommit       = [{foo,bar},{baz,buz}],
+      Props0          = [{n_val, N}, {precommit, Precommit}],
+      ok              = set_bucket(krc_server, B, Props0),
       {ok, Props}     = get_bucket(krc_server, B),
-      {ok, Precommit} = s2_lists:assoc(precommit, Props)
+      {ok, N}         = s2_lists:assoc(Props, n_val),
+      {ok, Precommit} = s2_lists:assoc(Props, precommit)
   end).
 
 basic_index_test() ->

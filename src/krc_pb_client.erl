@@ -67,7 +67,7 @@ get_bucket(Pid, Bucket, Timeout) ->
     riakc_pb_socket:get_bucket(Pid,
 			       krc_obj:encode_key(Bucket),
 			       Timeout) of
-    {ok, _}    = Res -> Res;
+    {ok, Props}      -> {ok, krc_bucket_properties:decode(Props)};
     {error, _} = Err -> Err
   end.
 
