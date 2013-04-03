@@ -104,6 +104,36 @@ decode_hooks(Hooks) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
+commit_hook_encode_decode_test() ->
+  Dec = [{foo,bar}],
+  Enc = [{struct, [{<<"mod">>, <<"foo">>}, {<<"fun">>, <<"bar">>}]}],
+  {ok, [{precommit,  Enc}]} = encode([{precommit,  Dec}]),
+  {ok, [{postcommit, Enc}]} = encode([{postcommit, Dec}]),
+  [{postcommit, Dec}] = decode([{postcommit, Enc}]),
+  [{precommit,  Dec}] = decode([{precommit,  Enc}]).
+
+illegal_property_test() ->
+  {error, illegal_bucket_property} = encode([{blah, foo}]),
+  {error, illegal_bucket_property} = encode([{precommit, blah}]),
+  {error, illegal_bucket_property} = encode([{w, ten}]).
+
+cover_test() ->
+  {ok, _} = encode([ {n_val, 3}
+		   , {allow_mult, true}
+		   , {last_write_wins, false}
+		   , {pr, all}
+		   , {r,  one}
+		   , {w,  quorum}
+		   , {pw, 2}
+		   , {dw, 1}
+		   , {rw, 3}
+		   , {basic_quorum, true}
+		   , {notfound_ok, true}
+		   , {backend, "blah"}
+		   ]).
+
+
+
 -endif.
 
 %%%_* Emacs ============================================================
