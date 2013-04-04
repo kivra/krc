@@ -80,9 +80,11 @@
 %% Riak API
 -export([ delete/3
         , get/3
+	, get_bucket/2
         , get_index/4
         , get_index/5
         , put/2
+	, set_bucket/3
         ]).
 
 %% gen_server callbacks
@@ -122,9 +124,11 @@
 %%%_ * API -------------------------------------------------------------
 delete(GS, B, K)          -> call(GS, {delete,    [B, K]   }).
 get(GS, B, K)             -> call(GS, {get,       [B, K]   }).
+get_bucket(GS, B)         -> call(GS, {get_bucket,[B]      }).
 get_index(GS, B, I, K)    -> call(GS, {get_index, [B, I, K]}).
 get_index(GS, B, I, L, U) -> call(GS, {get_index, [B, I, L, U]}).
 put(GS, O)                -> call(GS, {put,       [O]      }).
+set_bucket(GS, B, P)      -> call(GS, {set_bucket,[B, P]}).
 
 start(A)            -> gen_server:start(?MODULE, A, []).
 start(Name, A)      -> gen_server:start({local, Name}, ?MODULE, A, []).
@@ -244,8 +248,10 @@ do(Client, Pid, {F, A}) ->
 
 opts(delete)    -> [dopts()];
 opts(get)       -> [ropts()];
+opts(get_bucket)-> [];
 opts(get_index) -> [];
-opts(put)       -> [wopts()].
+opts(put)       -> [wopts()];
+opts(set_bucket)-> [].
 
 %%%_  * Config ---------------------------------------------------------
 %% Our app.config sets:
