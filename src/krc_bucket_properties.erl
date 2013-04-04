@@ -52,17 +52,17 @@ is_valid({dw,              Q})     -> is_n_val(Q);
 is_valid({rw,              Q})     -> is_n_val(Q);
 is_valid({basic_quorum,    Flag})  -> is_boolean(Flag);
 is_valid({notfound_ok,     Flag})  -> is_boolean(Flag);
-is_valid({backend,         _B})    -> true;
+is_valid({backend,         B})     -> is_list(B);
 is_valid(_)                        -> false.
 %% Existing but not implemented.
-%% is_valid({chash_keyfun,    _ModFun})     -> true;
-%% is_valid({linkfun,         _ModFun})     -> true;
-%% is_valid({old_vclock,      _Num})        -> true;
-%% is_valid({young_vclock,    _Num})        -> true;
-%% is_valid({big_vclock,      _Num})        -> true;
-%% is_valid({small_vclock,    _Num})        -> true;
-%% is_valid({search,          Flag})        -> is_boolean(Flag);
-%% is_valid({repl,            _Atom})       -> true;
+%% chash_keyfun
+%% linkfun
+%% old_vclock
+%% young_vclock
+%% big_vclock
+%% small_vclock
+%% search
+%% repl
 
 is_commit_hooks([])        -> true;
 is_commit_hooks([{M,F}|T])
@@ -82,22 +82,23 @@ to_riakc_pb(Opt)                 -> Opt.
 
 encode_hooks(Hooks) ->
   lists:map(fun({Mod,Fun}) ->
-		M = list_to_binary(atom_to_list(Mod)),
-		F = list_to_binary(atom_to_list(Fun)),
-		{struct, [{<<"mod">>, M}, {<<"fun">>, F}]}
+               M = list_to_binary(atom_to_list(Mod)),
+               F = list_to_binary(atom_to_list(Fun)),
+               {struct, [{<<"mod">>, M}, {<<"fun">>, F}]}
 	    end, Hooks).
 
 %%%_ * Internals decode ------------------------------------------------
 from_riakc_pb({precommit,  Hooks}) -> {precommit,  decode_hooks(Hooks)};
 from_riakc_pb({postcommit, Hooks}) -> {postcommit, decode_hooks(Hooks)};
+from_riakc_pb({backend, B})        -> {backend, binary_to_list(B)};
 from_riakc_pb(Opt)                 -> Opt.
 
 decode_hooks(Hooks) ->
   lists:map(fun({struct, Props}) ->
-		{ok, M} = s2_lists:assoc(Props, <<"mod">>),
-		{ok, F} = s2_lists:assoc(Props, <<"fun">>),
-		{list_to_atom(binary_to_list(M)),
-		 list_to_atom(binary_to_list(F))}
+               {ok, M} = s2_lists:assoc(Props, <<"mod">>),
+               {ok, F} = s2_lists:assoc(Props, <<"fun">>),
+               {list_to_atom(binary_to_list(M)),
+                list_to_atom(binary_to_list(F))}
 	    end, Hooks).
 
 %%%_* Tests ============================================================
@@ -131,8 +132,6 @@ cover_test() ->
 		   , {notfound_ok, true}
 		   , {backend, "blah"}
 		   ]).
-
-
 
 -endif.
 

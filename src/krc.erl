@@ -48,17 +48,17 @@
 
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
--type server()   :: atom() | pid().
--type strategy() :: module() %policy
-                  | krc_resolver:resolution_procedure().
+-type server()       :: atom() | pid().
+-type strategy()     :: module() %policy
+		      | krc_resolver:resolution_procedure().
 
--type bucket()   :: krc_obj:bucket().
--type key()      :: krc_obj:key().
--type idx()      :: krc_obj:idx().
--type idx_key()  :: {match, _}
-                  | {range, integer(), integer()}.
--type obj()      :: krc_obj:ect().
--type props()    :: [{atom(),_}].
+-type bucket()       :: krc_obj:bucket().
+-type key()          :: krc_obj:key().
+-type idx()          :: krc_obj:idx().
+-type idx_key()      :: {match, _}
+		      | {range, integer(), integer()}.
+-type obj()          :: krc_obj:ect().
+-type bucket_props() :: [{Key :: atom(), Val :: any()}].
 
 %%%_ * API -------------------------------------------------------------
 -spec delete(server(), bucket(), key()) -> whynot(_).
@@ -91,7 +91,7 @@ get_loop(I, N, S, B, K, F) when N >= I ->
   end;
 get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
 
--spec get_bucket(server(), bucket()) -> maybe(props(), _).
+-spec get_bucket(server(), bucket()) -> maybe(bucket_props(), _).
 get_bucket(S, B) ->
   krc_server:get_bucket(S, B).
 
@@ -132,7 +132,7 @@ put(S, O) -> krc_server:put(S, O).
 put_index(S, O, Indices) when is_list(Indices) ->
   krc_server:put(S, krc_obj:set_indices(O, Indices)).
 
--spec set_bucket(server(), bucket(), props()) -> whynot(_).
+-spec set_bucket(server(), bucket(), bucket_props()) -> whynot(_).
 %% @doc Set bucket properties P.
 set_bucket(S, B, P) ->
   case krc_bucket_properties:encode(P) of
@@ -190,16 +190,28 @@ delete_test() ->
     true              = obj_eq(Obj0, Obj)
   end).
 
-bucket_test() ->
+set_get_bucket_test() ->
+  krc_test:with_pb(2, fun(Inputs) ->
+    [ {B1, _K1, _, _, _V1}
+    , {B2, _K2, _, _, _V2}
+    ] = Inputs,
+    Backend1       = "foo",
+    Backend2       = "bar",
+    ok             = set_bucket(krc_server, B1, [{backend, Backend1}]),
+    ok             = set_bucket(krc_server, B2, [{backend, Backend2}]),
+    {ok, Props1}   = get_bucket(krc_server, B1),
+    {ok, Props2}   = get_bucket(krc_server, B2),
+    {ok, Backend1} = s2_lists:assoc(Props1, backend),
+    {ok, Backend2} = s2_lists:assoc(Props2, backend)
+  end).
+
+precommit_fail_test() ->
   krc_test:with_pb(1, fun(Inputs) ->
-    [{B, _K, _, _, _V}] = Inputs,
-      N               = 9,
-      Precommit       = [{foo,bar},{baz,buz}],
-      Props0          = [{n_val, N}, {precommit, Precommit}],
-      ok              = set_bucket(krc_server, B, Props0),
-      {ok, Props}     = get_bucket(krc_server, B),
-      {ok, N}         = s2_lists:assoc(Props, n_val),
-      {ok, Precommit} = s2_lists:assoc(Props, precommit)
+    [{B, K, _, _, V}] = Inputs,
+    Props             = [{precommit, [{foo,bar}]}],
+    ok                = set_bucket(krc_server, B, Props),
+    {error, _}        = put(krc_server, krc_obj:new(B,K,V)),
+    {error, notfound} = get(krc_server, B, K)
   end).
 
 basic_index_test() ->
