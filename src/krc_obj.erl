@@ -30,10 +30,8 @@
 %% Representation
 -export([ decode/1
         , decode_index/1
-	, decode_key/1
         , encode/1
         , encode_index/1
-	, encode_key/1
         , from_riakc_obj/1
         , to_riakc_obj/1
         ]).
@@ -123,7 +121,7 @@ is_idx(_)                    -> false.
 
 -spec to_riakc_obj(ect()) -> riakc_obj().
 to_riakc_obj(#krc_obj{bucket=B, key=K, indices=I, val=V, vclock=C}) ->
-  riakc_obj:new_obj(encode_key(B), encode_key(K), C, [{encode_indices(I), encode(V)}]).
+  riakc_obj:new_obj(encode(B), encode(K), C, [{encode_indices(I), encode(V)}]).
 
 
 -spec from_riakc_obj(riakc_obj()) -> ect() | no_return().
@@ -131,8 +129,8 @@ to_riakc_obj(#krc_obj{bucket=B, key=K, indices=I, val=V, vclock=C}) ->
 from_riakc_obj(Obj) ->
   {riakc_obj, _, _, _, _, undefined, undefined} = Obj, %assert
   Contents = riakc_obj:get_contents(Obj),
-  #krc_obj{ bucket  = decode_key(riakc_obj:bucket(Obj))
-          , key     = decode_key(riakc_obj:key(Obj))
+  #krc_obj{ bucket  = decode(riakc_obj:bucket(Obj))
+          , key     = decode(riakc_obj:key(Obj))
           , val     = [decode(V) || {_, V} <- Contents]
           , indices = [decode_indices(MD) || {MD, _} <- Contents]
           , vclock  = riakc_obj:vclock(Obj) %opaque
@@ -166,14 +164,6 @@ resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
 %%%_ * Representation --------------------------------------------------
 %% On-disk (we allow arbitrary terms, Riak stores binaries; these are
 %% used for bucket names, keys, and values).
-
-%% Buckets and keys are encoded as base16.
--spec encode_key(_)            -> binary().
-encode_key(X)                  -> list_to_binary(s2_hex:encode(X)).
-
--spec decode_key(binary())     -> _.
-decode_key(X)                  -> s2_hex:decode(binary_to_list(X)).
-
 -spec encode(_)                -> binary().
 encode(X)                      -> term_to_binary(X).
 
@@ -236,11 +226,11 @@ basic_test() ->
   KrcObj1       = new(foo, bar, baz),
   RiakcObj1     = to_riakc_obj(KrcObj1),
   {ok, KrcObj1} = resolve(from_riakc_obj(RiakcObj1), resolver()),
-  ?assertEqual(encode_key(foo), riakc_obj:bucket(RiakcObj1)),
-  ?assertEqual(encode_key(bar), riakc_obj:key(RiakcObj1)),
+  ?assertEqual(encode(foo), riakc_obj:bucket(RiakcObj1)),
+  ?assertEqual(encode(bar), riakc_obj:key(RiakcObj1)),
   ?assertEqual([{dict:new(), encode(baz)}], riakc_obj:get_contents(RiakcObj1)),
 
-  RiakcObj2     = new_riakc_obj(encode_key(foo), encode_key(bar), encode(baz)),
+  RiakcObj2     = new_riakc_obj(encode(foo), encode(bar), encode(baz)),
   {ok, KrcObj2} = resolve(from_riakc_obj(RiakcObj2), resolver()),
   RiakcObj2     = to_riakc_obj(KrcObj2),
   foo           = bucket(KrcObj2),
