@@ -312,6 +312,23 @@ range_index_test() ->
     {ok, []}     = get_index(krc_server, B, I, {range, 21, 30})
   end).
 
+bucket_index_test() ->
+  krc_test:with_pb(3, fun(Inputs) ->
+    [ {B1, K1, _, _, V1}
+    , {_,  K2, _, _, V2}
+    , {B2, K3, _, _, V3}
+    ] = Inputs,
+    Obj1       = krc_obj:new(B1, K1, V1),
+    Obj2       = krc_obj:new(B1, K2, V2),
+    Obj3       = krc_obj:new(B2, K3, V3),
+    ok         = put(krc_server, Obj1),
+    ok         = put(krc_server, Obj2),
+    ok         = put(krc_server, Obj3),
+    {ok, Objs} = get_index(
+                   krc_server, B1, '$bucket', {match, '$bucket'}),
+    true        = s2_lists:is_permutation([V1, V2], vals(Objs))
+  end).
+
 conflict_ok_test() ->
   krc_test:with_pb(2, fun(Inputs) ->
     [ {B, K, _, _, V1}
