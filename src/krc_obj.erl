@@ -175,6 +175,8 @@ decode(X)                      -> binary_to_term(X).
 %% index type based on the type of the index key, and allow any Erlang
 %% term as the name).
 -spec encode_index({_, _})     -> {binary(), binary()}.
+encode_index({'$bucket',
+              '$bucket'})      -> {<<"$bucket">>, <<"$bucket">>};
 encode_index({Idx, Key})
   when is_integer(Key)         -> {encode_idx(Idx,"int"), encode_int_key(Key)};
 encode_index({Idx, Key})       -> {encode_idx(Idx,"bin"), encode_bin_key(Key)}.
