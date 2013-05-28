@@ -107,7 +107,7 @@
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
 -define(CALL_TIMEOUT,  30000). %gen_server:call/3
--define(TIMEOUT,       (?CALL_TIMEOUT/2)).
+-define(TIMEOUT,       (?CALL_TIMEOUT - 15000)).
 
 -define(FAILURES,      100). %max number of worker failures to tolerate
 
