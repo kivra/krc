@@ -36,6 +36,7 @@
 
 %%%_* Includes =========================================================
 -include_lib("stdlib2/include/prelude.hrl").
+-include_lib("riakc/include/riakc.hrl").
 
 %%%_* Code =============================================================
 delete(Pid, Bucket, Key, Options, Timeout) ->
@@ -75,7 +76,7 @@ get_index(Pid, Bucket, Index, Key, Timeout) ->
                               Timeout,
                               infinity) %gen_server call
   of
-    {ok, Keys}       -> {ok, [krc_obj:decode(K) || K <- Keys]};
+    {ok, Res}        -> {ok, [krc_obj:decode(K) || K <- Res?INDEX_RESULTS.keys]};
     {error, _} = Err -> Err
   end.
 
@@ -91,7 +92,7 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
                               Timeout,
                               infinity) %gen_server call
   of
-    {ok, Keys}       -> {ok, [krc_obj:decode(K) || K <- Keys]};
+    {ok, Res}        ->  {ok, [krc_obj:decode(K) || K <- Res?INDEX_RESULTS.keys]};
     {error, _} = Err -> Err
   end.
 
