@@ -270,6 +270,7 @@ ropts() ->
   , {pr,              1}             %/ reads
   , {basic_quorum,    false}
   , {notfound_ok,     true}
+  , {timeout,         ?TIMEOUT}
   ].
 
 %% Writes
@@ -277,6 +278,7 @@ wopts() ->
   [ {w,               quorum}        %\  Majority
   , {pw,              1}             % } disk
   , {dw,              quorum}        %/  writes
+  , {timeout,         ?TIMEOUT}
   ].
 
 %% Deletes
@@ -287,6 +289,7 @@ dopts() ->
   , {w,               quorum}        %  / deletes
   , {pw,              1}             % /
   , {dw,              quorum}        %/
+  , {timeout,         ?TIMEOUT}
   ].
 
 %%%_* Tests ============================================================
