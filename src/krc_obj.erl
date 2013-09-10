@@ -168,12 +168,12 @@ resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
 %%%_ * Representation --------------------------------------------------
 %% On-disk (we allow arbitrary terms, Riak stores binaries; these are
 %% used for bucket names, keys, and values).
--spec encode(_)                -> binary().
-encode(X)                      -> term_to_binary(X).
+-spec encode(binary)           -> binary().
+encode(X)                      -> X.
 
 -spec decode(binary())         -> _.
 decode(<<>>)                   -> ?TOMBSTONE;
-decode(X)                      -> binary_to_term(X).
+decode(X)                      -> X.
 
 %% Index names (Riak uses strings with a type suffix; we determine the
 %% index type based on the type of the index key, and allow any Erlang
