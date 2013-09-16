@@ -106,7 +106,7 @@
 
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
--define(CALL_TIMEOUT,  30000). %gen_server:call/3
+-define(CALL_TIMEOUT,  60000). %gen_server:call/3
 -define(TIMEOUT,       (?CALL_TIMEOUT - 15000)).
 
 -define(FAILURES,      100). %max number of worker failures to tolerate
@@ -270,7 +270,6 @@ ropts() ->
   , {pr,              1}             %/ reads
   , {basic_quorum,    false}
   , {notfound_ok,     true}
-  , {timeout,         ?TIMEOUT}
   ].
 
 %% Writes
@@ -278,7 +277,6 @@ wopts() ->
   [ {w,               quorum}        %\  Majority
   , {pw,              1}             % } disk
   , {dw,              quorum}        %/  writes
-  , {timeout,         ?TIMEOUT}
   ].
 
 %% Deletes
@@ -289,7 +287,6 @@ dopts() ->
   , {w,               quorum}        %  / deletes
   , {pw,              1}             % /
   , {dw,              quorum}        %/
-  , {timeout,         ?TIMEOUT}
   ].
 
 %%%_* Tests ============================================================
