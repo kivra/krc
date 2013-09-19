@@ -187,7 +187,10 @@ encode_index({Idx, Key})       -> {encode_idx(Idx,<<"bin">>), Key}.
 
 -spec decode_index({binary(), binary()})
                                -> {_, _}.
-decode_index({Idx, _Key})       -> decode_idx(Idx).
+decode_index({Idx, Key})       -> case decode_idx(Idx) of
+                                    {<<"int">>, Name} -> {Name, Key};
+                                    {<<"bin">>, Name} -> {Name, Key}
+                                  end.
 
 -spec encode_idx(_, string())  -> binary().
 encode_idx(Name, Suffix)       -> add_suffix(Name, Suffix).
