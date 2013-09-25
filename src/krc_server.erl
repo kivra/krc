@@ -353,6 +353,16 @@ timeout_test() ->
 failures_test() ->
   ?MODULE:start([{riak_port, 6666}]).
 
+worker_crash_test() ->
+  krc_test:with_mock([{pool_size, 1}], ?thunk(
+    krc_mock_client:lag(500),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req())),
+    {links, [Pid]} = erlang:process_info(whereis(krc_server), links),
+    exit(Pid, die),
+    timer:sleep(100), %make sure request is routed to new worker
+    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req())))).
+
 disconnected_test() ->
   krc_test:with_mock(?thunk(
     krc_mock_client:disconnect(),
