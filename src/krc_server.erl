@@ -107,11 +107,11 @@
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
 -define(TIMEOUT,       120000). %gen_server:call/3
--define(QUEUE_TIMEOUT, 60000).
--define(CALL_TIMEOUT,  60000).
+-define(QUEUE_TIMEOUT, 2000).
+-define(CALL_TIMEOUT,  3000).
 
 -define(FAILURES,      100). %max number of worker failures to tolerate
-
+-define(TICK_TIME,     1000).
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -record(s,
@@ -123,6 +123,7 @@
         , free       :: [pid()]
         , busy=[]    :: [pid()]
         , queue=queue:new()
+        , tref       :: reference()
         }).
 
 %%%_ * API -------------------------------------------------------------
@@ -151,17 +152,18 @@ init(Args) ->
   PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
   Pids     = [connection_start(Client, IP, Port, self()) ||
                _ <- lists:seq(1, PoolSize)],
-  {ok, #s{client=Client, ip=IP, port=Port, pids=Pids, free=Pids}}.
+  {ok, TRef} = timer:send_interval(?TICK_TIME, tick),
+  {ok, #s{client=Client, ip=IP, port=Port, pids=Pids, free=Pids, tref=TRef}}.
 
-terminate(_, #s{}) -> ok.
+terminate(_, #s{tref=TRef}) -> {ok, cancel} = timer:cancel(TRef), ok.
 
-code_change(_, S, _) -> {ok, S, wait(S#s.queue)}.
+code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
 handle_call(Req, From, #s{free=[]} = S) ->
   Queue = queue:in({Req, From}, S#s.queue),
-  {noreply, S#s{queue=Queue}, wait(Queue)};
+  {noreply, S#s{queue=Queue}};
 handle_call(Req, From, #s{free=[Pid|Pids]} = S) ->
   ?hence(queue:is_empty(S#s.queue)),
   Pid ! {handle, Req, From},
@@ -195,7 +197,7 @@ handle_info({'EXIT', Pid, Rsn},
                , busy     = Busy
                , queue    = Queue
                , failures = N+1
-               }, wait(Queue)};
+               }};
 handle_info({free, Pid}, S) ->
   ?hence(lists:member(Pid, S#s.pids)),
   ?hence(lists:member(Pid, S#s.busy)),
@@ -204,13 +206,14 @@ handle_info({free, Pid}, S) ->
                                   S#s.queue),
   {noreply, S#s{ free  = Free
                , busy  = Busy
-               , queue = Queue}, wait(Queue)};
-handle_info(timeout, S) ->
+               , queue = Queue}};
+handle_info(tick, S) ->
   Queue = prune(S#s.queue),
-  {noreply, S#s{queue=Queue}, wait(Queue)};
+  s2_procs:flush(tick),
+  {noreply, S#s{queue=Queue}};
 handle_info(Msg, S) ->
   ?warning("~p", [Msg]),
-  {noreply, S, wait(S#s.queue)}.
+  {noreply, S}.
 
 %%%_ * Internals -------------------------------------------------------
 next_task([Pid|Free]=Free0, Busy, Queue0) ->
@@ -220,12 +223,6 @@ next_task([Pid|Free]=Free0, Busy, Queue0) ->
       {Free, [Pid|Busy], Queue};
     {empty, Queue0} ->
       {Free0, Busy, Queue0}
-  end.
-
-wait(Queue) ->
-  case queue:out(Queue) of
-    {{value, {{TS0, _Req}, _From}}, _} -> time_left(TS0);
-    {empty, Queue}                     -> infinity
   end.
 
 prune(Queue0) ->
@@ -288,7 +285,7 @@ connection(Client, Pid, Daddy) ->
 time_left(T0) ->
   T1        = s2_time:stamp(),
   ElapsedMs = (T1 - T0) / 1000,
-  lists:max(?QUEUE_TIMEOUT - ElapsedMs, 0).
+  lists:max([?QUEUE_TIMEOUT - ElapsedMs, 0]).
 
 -spec do(atom(), pid(), {atom(), [_]}) -> maybe(_, _).
 do(Client, Pid, {F, A}) ->
