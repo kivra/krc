@@ -123,7 +123,6 @@
         , free       :: [pid()]
         , busy=[]    :: [pid()]
         , queue=queue:new()
-        , tref       :: reference()
         }).
 
 %%%_ * API -------------------------------------------------------------
@@ -152,18 +151,16 @@ init(Args) ->
   PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
   Pids     = [connection_start(Client, IP, Port, self()) ||
                _ <- lists:seq(1, PoolSize)],
-  {ok, TRef} = timer:send_interval(?TICK_TIME, tick),
-  {ok, #s{client=Client, ip=IP, port=Port, pids=Pids, free=Pids, tref=TRef}}.
+  {ok, #s{client=Client, ip=IP, port=Port, pids=Pids, free=Pids}}.
 
-terminate(_, #s{tref=TRef}) -> {ok, cancel} = timer:cancel(TRef), ok.
+terminate(_, #s{}) -> ok.
 
 code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
 handle_call(Req, From, #s{free=[]} = S) ->
-  Queue = queue:in({Req, From}, S#s.queue),
-  {noreply, S#s{queue=Queue}};
+  {noreply, S#s{queue=queue:in({Req, From}, S#s.queue)}};
 handle_call(Req, From, #s{free=[Pid|Pids]} = S) ->
   ?hence(queue:is_empty(S#s.queue)),
   Pid ! {handle, Req, From},
@@ -207,10 +204,6 @@ handle_info({free, Pid}, S) ->
   {noreply, S#s{ free  = Free
                , busy  = Busy
                , queue = Queue}};
-handle_info(tick, S) ->
-  Queue = prune(S#s.queue),
-  s2_procs:flush(tick),
-  {noreply, S#s{queue=Queue}};
 handle_info(Msg, S) ->
   ?warning("~p", [Msg]),
   {noreply, S}.
@@ -225,21 +218,6 @@ next_task([Pid|Free]=Free0, Busy, Queue0) ->
       {Free0, Busy, Queue0}
   end.
 
-prune(Queue0) ->
-  case queue:out(Queue0) of
-    {{value, {{TS0, Req}, {Caller, _} = From}}, Queue} ->
-      case time_left(TS0) of
-        0 ->
-          ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
-          ?increment([requests, out_of_time]),
-          gen_server:reply(From, {error, timeout}),
-          prune(Queue);
-        _ -> Queue
-      end;
-    {empty, Queue0} ->
-      Queue0
-  end.
-
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
   proc_lib:spawn_link(?thunk(
@@ -248,9 +226,9 @@ connection_start(Client, IP, Port, Daddy) ->
 
 connection(Client, Pid, Daddy) ->
   receive
-    {handle, {_TS, Req}, {Caller, _} = From} ->
-      case s2_procs:is_up(Caller) of
-        true ->
+    {handle, {TS, Req}, {Caller, _} = From} ->
+      case {s2_procs:is_up(Caller), time_left(TS)>0} of
+        {true, true} ->
           case ?lift(do(Client, Pid, Req)) of
             {error, disconnected} = Err ->
               gen_server:reply(From, Err),
@@ -273,7 +251,11 @@ connection(Client, Pid, Daddy) ->
           end;
         {false, _} ->
           ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
-          ?increment([requests, dropped])
+          ?increment([requests, dropped]);
+        {_, false} ->
+          ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
+          ?increment([requests, out_of_time]),
+          gen_server:reply(From, {error, timeout})
       end,
       Daddy ! {free, self()},
       ?MODULE:connection(Client, Pid, Daddy);
