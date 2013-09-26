@@ -111,7 +111,6 @@
 -define(CALL_TIMEOUT,  60000).
 
 -define(FAILURES,      100). %max number of worker failures to tolerate
--define(TICK_TIME,     1000).
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -record(s,
