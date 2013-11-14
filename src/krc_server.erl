@@ -106,11 +106,11 @@
 
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
--define(TIMEOUT,       120000). %gen_server:call/3
--define(QUEUE_TIMEOUT, 60000).
--define(CALL_TIMEOUT,  60000).
-
--define(FAILURES,      100). %max number of worker failures to tolerate
+-define(TIMEOUT,         120000). %gen_server:call/3
+-define(QUEUE_TIMEOUT,   60000).
+-define(CALL_TIMEOUT,    60000).
+-define(MAX_DISCONNECTS, 5).
+-define(FAILURES,        100). %max number of worker failures to tolerate
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -record(s,
@@ -122,6 +122,13 @@
         , free       :: [pid()]
         , busy=[]    :: [pid()]
         , queue=queue:new()
+        }).
+
+-record(req,
+        { from
+        , ts          = throw('stamp')
+        , req         = throw('req')
+        , disconnects = 0
         }).
 
 %%%_ * API -------------------------------------------------------------
@@ -139,7 +146,8 @@ start_link(A)       -> gen_server:start_link(?MODULE, A, []).
 start_link(Name, A) -> gen_server:start_link({local, Name}, ?MODULE, A, []).
 stop(GS)            -> gen_server:call(GS, stop).
 
-call(GS, Req) -> gen_server:call(GS, {s2_time:stamp(), Req}, ?TIMEOUT).
+call(GS, Req) -> gen_server:call(
+                   GS, #req{ts=s2_time:stamp(),req=Req}, ?TIMEOUT).
 
 %%%_ * gen_server callbacks --------------------------------------------
 init(Args) ->
@@ -159,26 +167,38 @@ code_change(_, S, _) -> {ok, S}.
 handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
 handle_call(Req, From, #s{free=[]} = S) ->
-  {noreply, S#s{queue=queue:in({Req, From}, S#s.queue)}};
-handle_call(Req, From, #s{free=[Pid|Pids]} = S) ->
+  {noreply, S#s{queue=queue:in(Req#req{from=From}, S#s.queue)}};
+handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
   ?hence(queue:is_empty(S#s.queue)),
-  Pid ! {handle, Req, From},
-  {noreply, S#s{free=Pids, busy=[Pid|S#s.busy]}}.
+  Req = Req0#req{from=From},
+  Pid ! {handle, Req},
+  {noreply, S#s{free=Pids, busy=[{Pid,Req}|S#s.busy]}}.
 
 handle_cast(_Msg, S) -> {stop, bad_cast, S}.
 
+handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
+  ?hence(lists:member(Pid, Pids)),
+  case lists:keytake(Pid, 1, S#s.busy) of
+    {value, {Pid, #req{disconnects=?MAX_DISCONNECTS}=Req}, Busy} ->
+      ?critical("EXIT disconnected: ~p", [Pid]),
+      gen_server:reply(Req#req.from, {error, disconnected}),
+      {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
+    {value, {Pid, #req{disconnects=N}}=Req, Busy} ->
+      NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
+      ?info("Retrying disconncted request: ~p", [NewPid]),
+      NewPid ! {handle, Req},
+      {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
+                   , busy = [{NewPid,Req#req{disconnects=N+1}}|Busy]}};
+    false ->
+      NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
+      {noreply, S#s{pids=[NewPid|Pids] -- [Pid]}}
+  end;
 handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
   %% We assume that the system is restarted occasionally anyway (for upgrades
   %% and such), so we don't bother resetting the counter.
   ?critical("EXIT ~p: ~p: too many failures", [Pid, Rsn]),
   ?increment([exits, failures]),
   {stop, failures, S};
-handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S)  ->
-  %% Die if we can't talk to localhost.
-  ?hence(lists:member(Pid, Pids)),
-  ?critical("EXIT ~p: disconnected", [Pid]),
-  ?increment([exits, disconnected]),
-  {stop, disconnected, S};
 handle_info({'EXIT', Pid, Rsn},
             #s{client=Client, ip=IP, port=Port, failures=N} = S) ->
   ?hence(lists:member(Pid, S#s.pids)),
@@ -186,7 +206,7 @@ handle_info({'EXIT', Pid, Rsn},
   ?increment([exits, other]),
   NewPid = connection_start(Client, IP, Port, self()),
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
-                                  S#s.busy -- [Pid],
+                                  lists:keydelete(Pid, 1, S#s.busy),
                                   S#s.queue),
   {noreply, S#s{ pids     = [NewPid|S#s.pids] -- [Pid]
                , free     = Free
@@ -194,11 +214,12 @@ handle_info({'EXIT', Pid, Rsn},
                , queue    = Queue
                , failures = N+1
                }};
-handle_info({free, Pid}, S) ->
+handle_info({free, Pid, Res}, S) ->
   ?hence(lists:member(Pid, S#s.pids)),
-  ?hence(lists:member(Pid, S#s.busy)),
+  {value, {Pid, #req{from=From}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
+  [gen_server:reply(From, Res) || Res =/= {error, dropped}],
   {Free, Busy, Queue} = next_task(S#s.free ++ [Pid],
-                                  S#s.busy -- [Pid],
+                                  Busy0,
                                   S#s.queue),
   {noreply, S#s{ free  = Free
                , busy  = Busy
@@ -210,9 +231,9 @@ handle_info(Msg, S) ->
 %%%_ * Internals -------------------------------------------------------
 next_task([Pid|Free]=Free0, Busy, Queue0) ->
   case queue:out(Queue0) of
-    {{value, {Req, From}}, Queue} ->
-      Pid ! {handle, Req, From},
-      {Free, [Pid|Busy], Queue};
+    {{value, Req}, Queue} ->
+      Pid ! {handle, Req},
+      {Free, [{Pid,Req}|Busy], Queue};
     {empty, Queue0} ->
       {Free0, Busy, Queue0}
   end.
@@ -225,43 +246,46 @@ connection_start(Client, IP, Port, Daddy) ->
 
 connection(Client, Pid, Daddy) ->
   receive
-    {handle, {TS, Req}, {Caller, _} = From} ->
+    {handle, #req{ts=TS, req=Req, from={Caller, _}}} ->
       case {s2_procs:is_up(Caller), time_left(TS)>0} of
         {true, true} ->
           case ?lift(do(Client, Pid, Req)) of
-            {error, disconnected} = Err ->
-              gen_server:reply(From, Err),
+            {error, disconnected} ->
+              %% special case due to shitty overload protection on riak side?
+              %% request will possibly be retried
               exit(disconnected);
             {error, timeout} = Err ->
               ?error("timeout", []),
               ?increment([requests, timeouts]),
-              gen_server:reply(From, Err);
+              Daddy ! {free, self(), Err};
             {error, notfound} = Err ->
               ?debug("notfound", []),
               ?increment([requests, notfound]),
-              gen_server:reply(From, Err);
+              Daddy ! {free, self(), Err};
             {error, Rsn} = Err ->
               ?error("error: ~p", [Rsn]),
               ?increment([requests, errors]),
-              gen_server:reply(From, Err);
-            {ok, Res} = Ok ->
+              Daddy ! {free, self(), Err};
+            {ok, ok} ->
               ?increment([requests, ok]),
-              gen_server:reply(From, if Res =:= ok -> ok; true -> Ok end)
+              Daddy ! {free, self(), ok};
+            {ok, _} = Ok ->
+              ?increment([requests, ok]),
+              Daddy ! {free, self(), Ok}
           end;
         {false, _} ->
           ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
-          ?increment([requests, dropped]);
+          ?increment([requests, dropped]),
+          Daddy ! {free, self(), {error, dropped}};
         {_, false} ->
           ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
           ?increment([requests, out_of_time]),
-          gen_server:reply(From, {error, timeout})
-      end,
-      Daddy ! {free, self()},
-      ?MODULE:connection(Client, Pid, Daddy);
+          Daddy ! {free, self(), {error, timeout}}
+      end;
     Msg ->
-      ?warning("~p", [Msg]),
-      ?MODULE:connection(Client, Pid, Daddy)
-  end.
+      ?warning("~p", [Msg])
+  end,
+  ?MODULE:connection(Client, Pid, Daddy).
 
 time_left(T0) ->
   T1        = s2_time:stamp(),
