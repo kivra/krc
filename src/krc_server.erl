@@ -193,7 +193,8 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
     false ->
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
       ?info("Reconnecting disconnected worker: ~p", [NewPid]),
-      {noreply, S#s{pids=[NewPid|Pids] -- [Pid]}}
+      {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
+                   , free = [NewPid|S#s.free] -- [Pid]}}
   end;
 handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
   %% We assume that the system is restarted occasionally anyway (for upgrades
