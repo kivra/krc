@@ -184,7 +184,7 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
       ?critical("EXIT disconnected: ~p", [Pid]),
       gen_server:reply(Req#req.from, {error, disconnected}),
       {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
-    {value, {Pid, #req{disconnects=N}}=Req, Busy} ->
+    {value, {Pid, #req{disconnects=N}=Req}, Busy} ->
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
       ?info("Retrying disconncted request: ~p", [NewPid]),
       NewPid ! {handle, Req},
