@@ -107,8 +107,8 @@
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
 -define(TIMEOUT,         120000). %gen_server:call/3
--define(QUEUE_TIMEOUT,   60000).
--define(CALL_TIMEOUT,    60000).
+-define(QUEUE_TIMEOUT,   3000).
+-define(CALL_TIMEOUT,    3000).
 -define(MAX_DISCONNECTS, 5).
 -define(FAILURES,        100). %max number of worker failures to tolerate
 %%%_* Code =============================================================
@@ -179,7 +179,8 @@ handle_cast(_Msg, S) -> {stop, bad_cast, S}.
 handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
   ?hence(lists:member(Pid, Pids)),
   case lists:keytake(Pid, 1, S#s.busy) of
-    {value, {Pid, #req{disconnects=?MAX_DISCONNECTS}=Req}, Busy} ->
+    {value, {Pid, #req{disconnects=N}=Req}, Busy}
+      when N+1 >= ?MAX_DISCONNECTS ->
       ?critical("EXIT disconnected: ~p", [Pid]),
       gen_server:reply(Req#req.from, {error, disconnected}),
       {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
