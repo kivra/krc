@@ -192,6 +192,7 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
                    , busy = [{NewPid,Req#req{disconnects=N+1}}|Busy]}};
     false ->
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
+      ?info("Reconnecting disconnected worker: ~p", [NewPid]),
       {noreply, S#s{pids=[NewPid|Pids] -- [Pid]}}
   end;
 handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
@@ -394,11 +395,21 @@ worker_crash_test() ->
     krc_test:spawn_async(?thunk({error, notfound} = get_req())),
     krc_test:spawn_sync(?thunk({error, notfound} = get_req())))).
 
-disconnected_test() ->
+disconnected_request_test() ->
   krc_test:with_mock(?thunk(
     krc_mock_client:disconnect(),
     krc_test:spawn_sync(?thunk({error, disconnected} = get_req())),
     timer:sleep(100))). %wait for 'EXIT' message
+
+disconnected_test() ->
+  krc_test:with_mock([{pool_size, 2}], ?thunk(
+    ct:pal("XXX"),
+    {links, [Pid1,Pid2]} = erlang:process_info(whereis(krc_server), links),
+    exit(Pid1, disconnected),
+    exit(Pid2, disconnected),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req()))
+    )).
+
 
 get_index_delete_test() ->
   krc_test:with_mock(?thunk(
