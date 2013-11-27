@@ -361,17 +361,24 @@ client_down_test() ->
     s2_procs:kill(P, [unlink]), %\ Request
     krc_test:sync(Pids))).      %/ dropped
 
-out_of_time_test() ->
-  krc_test:with_mock([{pool_size, 1}], ?thunk(
-    krc_mock_client:lag(1000),
-    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
-    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
-    krc_test:spawn_sync(?thunk({error, timeout} = get_req())))).
 
-timeout_test() ->
-  krc_test:with_mock(?thunk(
-    krc_mock_client:lag(3000),
-    krc_test:spawn_sync(?thunk({error, timeout} = get_req())))).
+out_of_time_test_() ->
+  {timeout, 120,
+   ?thunk(
+      krc_test:with_mock([{pool_size, 1}], ?thunk(
+      krc_mock_client:lag(?QUEUE_TIMEOUT - 1000),
+      krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+      krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+      krc_test:spawn_sync(?thunk({error, timeout} = get_req()))))
+     )}.
+
+timeout_test_() ->
+  {timeout, 120,
+   ?thunk(
+      krc_test:with_mock(?thunk(
+      krc_mock_client:lag(?CALL_TIMEOUT + 1000),
+      krc_test:spawn_sync(?thunk({error, timeout} = get_req()))))
+     )}.
 
 failures_test() ->
   ?MODULE:start([{riak_port, 6666}]).
