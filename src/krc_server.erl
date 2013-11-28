@@ -107,9 +107,9 @@
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
 -define(TIMEOUT,         120000). %gen_server:call/3
--define(QUEUE_TIMEOUT,   3000).
--define(CALL_TIMEOUT,    3000).
--define(MAX_DISCONNECTS, 5).
+-define(QUEUE_TIMEOUT,   60000).
+-define(CALL_TIMEOUT,    60000).
+-define(MAX_DISCONNECTS, 3).
 -define(FAILURES,        100). %max number of worker failures to tolerate
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
@@ -404,7 +404,6 @@ disconnected_request_test() ->
 
 disconnected_test() ->
   krc_test:with_mock([{pool_size, 2}], ?thunk(
-    ct:pal("XXX"),
     {links, [Pid1,Pid2]} = erlang:process_info(whereis(krc_server), links),
     exit(Pid1, disconnected),
     exit(Pid2, disconnected),
