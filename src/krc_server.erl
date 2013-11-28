@@ -191,6 +191,13 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
       {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
                    , busy = [{NewPid,Req#req{disconnects=N+1}}|Busy]}};
     false ->
+      %% TODO: Since we don't have a limit on how many times
+      %% a worker (without work) can reconnect we rely on
+      %% that Riak is sensible here and don't disconnect
+      %% us right away.
+      %% This should possibly be replaced with a counter that
+      %% can tell us how many disconnects we have had the last X
+      %% minutes.
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
       ?info("Reconnecting disconnected worker: ~p", [NewPid]),
       {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
@@ -208,6 +215,8 @@ handle_info({'EXIT', Pid, Rsn},
   ?error("EXIT ~p: ~p", [Pid, Rsn]),
   ?increment([exits, other]),
   NewPid = connection_start(Client, IP, Port, self()),
+  %% TODO: If this was a request in progress we might
+  %% possibly want to respond something to the client
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
                                   lists:keydelete(Pid, 1, S#s.busy),
                                   S#s.queue),
