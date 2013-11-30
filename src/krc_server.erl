@@ -226,13 +226,10 @@ handle_info({'EXIT', Pid, Rsn},
                , queue    = Queue
                , failures = N+1
                }};
-handle_info({free, Pid, Res}, S) ->
+handle_info({free, Pid}, S) ->
   ?hence(lists:member(Pid, S#s.pids)),
-  {value, {Pid, #req{from=From}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
-  [gen_server:reply(From, Res) || Res =/= {error, dropped}],
-  {Free, Busy, Queue} = next_task(S#s.free ++ [Pid],
-                                  Busy0,
-                                  S#s.queue),
+  {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
+  {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
   {noreply, S#s{ free  = Free
                , busy  = Busy
                , queue = Queue}};
@@ -258,7 +255,7 @@ connection_start(Client, IP, Port, Daddy) ->
 
 connection(Client, Pid, Daddy) ->
   receive
-    {handle, #req{ts=TS, req=Req, from={Caller, _}}} ->
+    {handle, #req{ts=TS, req=Req, from={Caller, _}=From}} ->
       case {s2_procs:is_up(Caller), time_left(TS)>0} of
         {true, true} ->
           case ?lift(do(Client, Pid, Req)) of
@@ -269,31 +266,31 @@ connection(Client, Pid, Daddy) ->
             {error, timeout} = Err ->
               ?error("timeout", []),
               ?increment([requests, timeouts]),
-              Daddy ! {free, self(), Err};
+              gen_server:reply(From, Err);
             {error, notfound} = Err ->
               ?debug("notfound", []),
               ?increment([requests, notfound]),
-              Daddy ! {free, self(), Err};
+              gen_server:reply(From, Err);
             {error, Rsn} = Err ->
               ?error("error: ~p", [Rsn]),
               ?increment([requests, errors]),
-              Daddy ! {free, self(), Err};
+              gen_server:reply(From, Err);
             {ok, ok} ->
               ?increment([requests, ok]),
-              Daddy ! {free, self(), ok};
+              gen_server:reply(From, ok);
             {ok, _} = Ok ->
               ?increment([requests, ok]),
-              Daddy ! {free, self(), Ok}
+              gen_server:reply(From, Ok)
           end;
         {false, _} ->
           ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
-          ?increment([requests, dropped]),
-          Daddy ! {free, self(), {error, dropped}};
+          ?increment([requests, dropped]);
         {_, false} ->
           ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
           ?increment([requests, out_of_time]),
-          Daddy ! {free, self(), {error, timeout}}
-      end;
+          gen_server:reply(From, {error, timeout})
+      end,
+      Daddy ! {free, self()};
     Msg ->
       ?warning("~p", [Msg])
   end,
