@@ -214,11 +214,17 @@ handle_info({'EXIT', Pid, Rsn},
   ?hence(lists:member(Pid, S#s.pids)),
   ?error("EXIT ~p: ~p", [Pid, Rsn]),
   ?increment([exits, other]),
+  Busy1 =
+    case lists:keytake(Pid, 1, S#s.busy) of
+      {value, {Pid, #req{from=From}}, Busy0} ->
+        gen_server:reply(From, {error, Rsn}),
+        Busy0;
+      false ->
+        S#s.busy
+    end,
   NewPid = connection_start(Client, IP, Port, self()),
-  %% TODO: If this was a request in progress we might
-  %% possibly want to respond something to the client
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
-                                  lists:keydelete(Pid, 1, S#s.busy),
+                                  Busy1,
                                   S#s.queue),
   {noreply, S#s{ pids     = [NewPid|S#s.pids] -- [Pid]
                , free     = Free
