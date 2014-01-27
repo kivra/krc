@@ -158,11 +158,11 @@ decode_indices(MD) ->
   end.
 
 
-%% @doc Resolve conflicts by taking the union of all indices and
-%% computing the LUB of all values under F.
+%% @doc Resolve conflicts by computing the LUB of all values and
+%% indices under F.
 resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
   ?lift(Obj#krc_obj{ val     = ?unlift(s2_maybe:reduce(F, Vs))
-                   , indices = lists:usort(lists:flatten(Is))
+                   , indices = ?unlift(s2_maybe:reduce(F, Is))
                    }).
 
 %%%_ * Representation --------------------------------------------------
