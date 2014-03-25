@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc Protobuf client.
 %%%
-%%% Copyright 2013 Kivra AB
+%%% Copyright 2013-2014 Kivra AB
 %%% Copyright 2011-2013 Klarna AB
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,11 +26,12 @@
 %%%_* Exports ==========================================================
 -export([ delete/5
         , get/5
-	, get_bucket/3
+        , get_bucket/3
         , get_index/5
         , get_index/6
+        , list_keys/3
         , put/4
-	, set_bucket/4
+        , set_bucket/4
         , start_link/3
         ]).
 
@@ -60,8 +61,8 @@ get(Pid, Bucket, Key, Options, Timeout) ->
 get_bucket(Pid, Bucket, Timeout) ->
   case
     riakc_pb_socket:get_bucket(Pid,
-			       krc_obj:encode(Bucket),
-			       Timeout) of
+                   krc_obj:encode(Bucket),
+                   Timeout) of
     {ok, Props}      -> {ok, krc_bucket_properties:decode(Props)};
     {error, _} = Err -> Err
   end.
@@ -96,6 +97,9 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
     {error, _} = Err -> Err
   end.
 
+list_keys(Pid, Bucket, Timeout) ->
+    riakc_pb_socket:list_keys(Pid, krc_obj:encode(Bucket), Timeout).
+
 put(Pid, Obj, Options, Timeout) ->
   case
     riakc_pb_socket:put(Pid, krc_obj:to_riakc_obj(Obj), Options, Timeout)
@@ -107,9 +111,9 @@ put(Pid, Obj, Options, Timeout) ->
 set_bucket(Pid, Bucket, Props, Timeout) ->
   case
     riakc_pb_socket:set_bucket(Pid,
-			       krc_obj:encode(Bucket),
-			       Props,
-			       Timeout) of
+                   krc_obj:encode(Bucket),
+                   Props,
+                   Timeout) of
     ok               -> ok;
     {error, _} = Err -> Err
   end.

@@ -46,7 +46,7 @@
 %%%     dies, the other will be killed as well and all requests in the
 %%%     connection's message queue will time out.
 %%%
-%%% Copyright 2013 Kivra AB
+%%% Copyright 2013-2014 Kivra AB
 %%% Copyright 2011-2013 Klarna AB
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,11 +80,13 @@
 %% Riak API
 -export([ delete/3
         , get/3
-	, get_bucket/2
+        , get_bucket/2
         , get_index/4
         , get_index/5
+        , get_index/6
+        , list_keys/2
         , put/2
-	, set_bucket/3
+        , set_bucket/3
         ]).
 
 %% gen_server callbacks
@@ -108,7 +110,6 @@
 %% Make sure we time out internally before our clients time out.
 -define(TIMEOUT,         120000). %gen_server:call/3
 -define(QUEUE_TIMEOUT,   60000).
--define(CALL_TIMEOUT,    60000).
 -define(MAX_DISCONNECTS, 3).
 -define(FAILURES,        100). %max number of worker failures to tolerate
 %%%_* Code =============================================================
@@ -132,13 +133,17 @@
         }).
 
 %%%_ * API -------------------------------------------------------------
-delete(GS, B, K)          -> call(GS, {delete,    [B, K]   }).
-get(GS, B, K)             -> call(GS, {get,       [B, K]   }).
-get_bucket(GS, B)         -> call(GS, {get_bucket,[B]      }).
-get_index(GS, B, I, K)    -> call(GS, {get_index, [B, I, K]}).
-get_index(GS, B, I, L, U) -> call(GS, {get_index, [B, I, L, U]}).
-put(GS, O)                -> call(GS, {put,       [O]      }).
-set_bucket(GS, B, P)      -> call(GS, {set_bucket,[B, P]}).
+delete(GS, B, K)              -> call(GS, {delete,     [B, K]   }).
+get(GS, B, K)                 -> call(GS, {get,        [B, K]   }).
+get_bucket(GS, B)             -> call(GS, {get_bucket, [B]      }).
+get_index(GS, B, I, K)        -> call(GS, {get_index,  [B, I, K]}).
+get_index(GS, B, I, K, T)
+           when is_integer(T) -> call(GS, {get_index,  [B, I, K], T}, T);
+get_index(GS, B, I, L, U)     -> call(GS, {get_index,  [B, I, L, U]}).
+get_index(GS, B, I, L, U, T)  -> call(GS, {get_index,  [B, I, L, U], T}, T).
+list_keys(GS, B)              -> call(GS, {list_keys,  [B]}).
+put(GS, O)                    -> call(GS, {put,        [O]      }).
+set_bucket(GS, B, P)          -> call(GS, {set_bucket, [B, P]}).
 
 start(A)            -> gen_server:start(?MODULE, A, []).
 start(Name, A)      -> gen_server:start({local, Name}, ?MODULE, A, []).
@@ -146,8 +151,10 @@ start_link(A)       -> gen_server:start_link(?MODULE, A, []).
 start_link(Name, A) -> gen_server:start_link({local, Name}, ?MODULE, A, []).
 stop(GS)            -> gen_server:call(GS, stop).
 
-call(GS, Req) -> gen_server:call(
-                   GS, #req{ts=s2_time:stamp(),req=Req}, ?TIMEOUT).
+call(GS, Req)       -> gen_server:call(
+                         GS, #req{ts=s2_time:stamp(),req=Req}, ?TIMEOUT).
+call(GS, Req, T)    -> gen_server:call(
+                         GS, #req{ts=s2_time:stamp(),req=Req}, T).
 
 %%%_ * gen_server callbacks --------------------------------------------
 init(Args) ->
@@ -310,7 +317,12 @@ time_left(T0) ->
 
 -spec do(atom(), pid(), {atom(), [_]}) -> maybe(_, _).
 do(Client, Pid, {F, A}) ->
-  Args = [Pid] ++ A ++ opts(F) ++ [?CALL_TIMEOUT],
+    do(Client, Pid, {F, A}, ?CALL_TIMEOUT);
+do(Client, Pid, {F, A, T}) ->
+    do(Client, Pid, {F, A}, T).
+
+do(Client, Pid, {F, A}, T) ->
+  Args = [Pid] ++ A ++ opts(F) ++ [T],
   ?debug("apply(~p, ~p, ~p)", [Client, F, Args]),
   apply(Client, F, Args).
 
@@ -318,6 +330,7 @@ opts(delete)    -> [dopts()];
 opts(get)       -> [ropts()];
 opts(get_bucket)-> [];
 opts(get_index) -> [];
+opts(list_keys) -> [];
 opts(put)       -> [wopts()];
 opts(set_bucket)-> [].
 
