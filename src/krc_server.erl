@@ -134,10 +134,10 @@
         }).
 
 %%%_ * API -------------------------------------------------------------
-delete(GS, B, K)              -> call(GS, {delete,     [B, K]   }).
-get(GS, B, K)                 -> call(GS, {get,        [B, K]   }).
-get_bucket(GS, B)             -> call(GS, {get_bucket, [B]      }).
-get_index(GS, B, I, K)        -> call(GS, {get_index,  [B, I, K]}).
+delete(GS, B, K)                    -> call(GS, {delete,     [B, K]   }).
+get(GS, B, K)                       -> call(GS, {get,        [B, K]   }).
+get_bucket(GS, B)                   -> call(GS, {get_bucket, [B]      }).
+get_index(GS, B, I, K)              -> call(GS, {get_index,  [B, I, K]}).
 get_index(GS, B, I, K, T)
            when is_integer(T) -> call(GS, {get_index,  [B, I, K], T}, T);
 get_index(GS, B, I, L, U)     -> call(GS, {get_index,  [B, I, L, U]}).
