@@ -151,8 +151,7 @@ start_link(A)       -> gen_server:start_link(?MODULE, A, []).
 start_link(Name, A) -> gen_server:start_link({local, Name}, ?MODULE, A, []).
 stop(GS)            -> gen_server:call(GS, stop).
 
-call(GS, Req)       -> gen_server:call(
-                         GS, #req{ts=s2_time:stamp(),req=Req}, ?TIMEOUT).
+call(GS, Req)       -> call(GS, Req, ?TIMEOUT).
 call(GS, Req, T)    -> gen_server:call(
                          GS, #req{ts=s2_time:stamp(),req=Req}, T).
 
