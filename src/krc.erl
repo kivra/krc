@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc K Riak Client.
 %%%
-%%% Copyright 2013 Kivra AB
+%%% Copyright 2013-2014 Kivra AB
 %%% Copyright 2011-2013 Klarna AB
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,13 +28,15 @@
 -export([ delete/3
         , get/3
         , get/4
-	, get_bucket/2
+        , get_bucket/2
         , get_index/4
         , get_index/5
         , get_index_keys/4
+        , get_index_keys/5
+        , list_keys/2
         , put/2
         , put_index/3
-	, set_bucket/3
+        , set_bucket/3
         ]).
 
 %% Args
@@ -50,13 +52,13 @@
 %%%_ * Types -----------------------------------------------------------
 -type server()       :: atom() | pid().
 -type strategy()     :: module() %policy
-		      | krc_resolver:resolution_procedure().
+                      | krc_resolver:resolution_procedure().
 
 -type bucket()       :: krc_obj:bucket().
 -type key()          :: krc_obj:key().
 -type idx()          :: krc_obj:idx().
 -type idx_key()      :: {match, _}
-		      | {range, integer(), integer()}.
+                      | {range, integer(), integer()}.
 -type obj()          :: krc_obj:ect().
 -type bucket_props() :: [{Key :: atom(), Val :: any()}].
 
@@ -81,7 +83,14 @@ get_loop(S, B, K, F) ->
 get_loop(I, N, S, B, K, F) when N >= I ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
-      krc_obj:resolve(Obj, F);
+      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
+        {Ret,              false} -> Ret;
+        {{error, _}   = E, _}     -> E;
+        {{ok, NewObj} = R, true}  ->
+              ?increment([resolve, ok]),
+              krc_server:put(S, NewObj),
+              R
+      end;
     {error, notfound} ->
       ?debug("{~p, ~p} not found, attempt ~p of ~p", [B, K, I, N]),
       ?increment([reads, retries]),
@@ -117,10 +126,18 @@ get_index(S, B, I, K, Strat) ->
                         maybe([key()], _).
 %% @doc Get all keys tagged with I in bucket B.
 get_index_keys(S, B, I, K) ->
+    get_index_keys(S, B, I, K, ?CALL_TIMEOUT).
+
+get_index_keys(S, B, I, K, T) ->
   case K of
-    {match, X}    -> krc_server:get_index(S, B, I, X);
-    {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
+    {match, X}    -> krc_server:get_index(S, B, I, X, T);
+    {range, X, Y} -> krc_server:get_index(S, B, I, X, Y, T)
   end.
+
+
+-spec list_keys(server(), bucket()) -> maybe([key()], _).
+%% @doc Get all keys from a bucket B.
+list_keys(S, B) -> krc_server:list_keys(S, B).
 
 
 -spec put(server(), obj()) -> whynot(_).
