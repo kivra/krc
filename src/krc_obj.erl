@@ -43,6 +43,7 @@
         , val/1
         , indices/1
         , vclock/1
+        , siblings/1
         , set_bucket/2
         , set_val/2
         , set_indices/2
@@ -91,6 +92,7 @@ key(#krc_obj{key=K})         -> K.
 val(#krc_obj{val=V})         -> V.
 indices(#krc_obj{indices=I}) -> I.
 vclock(#krc_obj{vclock=C})   -> C.
+siblings(Obj)                -> length(val(Obj)) =/= 1.
 
 set_bucket(Obj, B)           -> Obj#krc_obj{bucket=B}.
 set_val(Obj, V)              -> Obj#krc_obj{val=V}.
