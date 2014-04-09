@@ -46,6 +46,7 @@
         , siblings/1
         , set_bucket/2
         , set_val/2
+        , set_vclock/2
         , set_indices/2
         ]).
 
@@ -96,6 +97,7 @@ siblings(Obj)                -> length(val(Obj)) =/= 1.
 
 set_bucket(Obj, B)           -> Obj#krc_obj{bucket=B}.
 set_val(Obj, V)              -> Obj#krc_obj{val=V}.
+set_vclock(Obj, C)           -> Obj#krc_obj{vclock=C}.
 set_indices(Obj, I)          -> ?hence(is_indices(I)), Obj#krc_obj{indices=I}.
 
 is_indices(I)                -> lists:all(fun is_idx/1, I).
