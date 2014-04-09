@@ -35,6 +35,7 @@
         , get_index_keys/5
         , list_keys/2
         , put/2
+        , put/3
         , put_index/3
         , set_bucket/3
         ]).
@@ -60,7 +61,8 @@
 -type idx_key()      :: {match, _}
                       | {range, integer(), integer()}.
 -type obj()          :: krc_obj:ect().
--type bucket_props() :: [{Key :: atom(), Val :: any()}].
+-type props()        :: [{Key :: atom(), Val :: any()} | atom()].
+-type bucket_props() :: props().
 
 %%%_ * API -------------------------------------------------------------
 -spec delete(server(), bucket(), key()) -> whynot(_).
@@ -140,9 +142,11 @@ get_index_keys(S, B, I, K, T) ->
 list_keys(S, B) -> krc_server:list_keys(S, B).
 
 
--spec put(server(), obj()) -> whynot(_).
+-spec put(server(), obj())          -> whynot(_).
+-spec put(server(), obj(), props()) -> whynot(_).
 %% @doc Store O.
-put(S, O) -> krc_server:put(S, O).
+put(S, O)       -> krc_server:put(S, O).
+put(S, O, Opts) -> krc_server:put(S, O, Opts).
 
 -spec put_index(server(), obj(), krc_obj:indices()) -> whynot(_).
 %% @doc Add O to Indices and store it.
