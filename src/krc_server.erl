@@ -194,8 +194,6 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
       {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
     {value, {Pid, #req{disconnects=N}=Req}, Busy} ->
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
-      ?warning("Retrying disconncted request (~p/~p): ~p",
-               [N+1, ?MAX_DISCONNECTS, NewPid]),
       NewPid ! {handle, Req},
       {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
                    , busy = [{NewPid,Req#req{disconnects=N+1}}|Busy]}};
