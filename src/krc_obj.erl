@@ -142,7 +142,7 @@ from_riakc_obj(Obj) ->
 
 
 %% We're only interested in index-metadata.
--spec encode_indices(indices()) -> dict().
+-spec encode_indices(indices()) -> dict:dict().
 encode_indices([_|_] = I) ->
   dict:store(
     ?MD_INDEX,
@@ -150,7 +150,7 @@ encode_indices([_|_] = I) ->
     dict:new());
 encode_indices([]) -> dict:new().
 
--spec decode_indices(dict()) -> indices().
+-spec decode_indices(dict:dict()) -> indices().
 decode_indices(MD) ->
   case dict:find(?MD_INDEX, MD) of
     {ok, I} -> lists:map(fun decode_index/1, I);
