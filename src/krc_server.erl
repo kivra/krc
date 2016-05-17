@@ -189,7 +189,7 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
   case lists:keytake(Pid, 1, S#s.busy) of
     {value, {Pid, #req{disconnects=N}=Req}, Busy}
       when N+1 > ?MAX_DISCONNECTS ->
-      ?critical("EXIT disconnected: ~p", [Pid]),
+      ?critical("Krc EXIT disconnected: ~p", [Pid]),
       gen_server:reply(Req#req.from, {error, disconnected}),
       {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
     {value, {Pid, #req{disconnects=N}=Req}, Busy} ->
@@ -213,13 +213,13 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
 handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
   %% We assume that the system is restarted occasionally anyway (for upgrades
   %% and such), so we don't bother resetting the counter.
-  ?critical("EXIT ~p: ~p: too many failures", [Pid, Rsn]),
+  ?critical("Krc EXIT ~p: ~p: too many failures", [Pid, Rsn]),
   ?increment([exits, failures]),
   {stop, failures, S};
 handle_info({'EXIT', Pid, Rsn},
             #s{client=Client, ip=IP, port=Port, failures=N} = S) ->
   ?hence(lists:member(Pid, S#s.pids)),
-  ?error("EXIT ~p: ~p", [Pid, Rsn]),
+  ?error("Krc EXIT ~p: ~p", [Pid, Rsn]),
   ?increment([exits, other]),
   Busy1 =
     case lists:keytake(Pid, 1, S#s.busy) of

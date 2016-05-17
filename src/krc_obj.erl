@@ -158,22 +158,22 @@ decode_indices(MD) ->
   end.
 
 
-%% @doc Resolve conflicts by taking the union of all indices and
-%% computing the LUB of all values under F.
+%% @doc Resolve conflicts by computing the LUB of all values and
+%% indices under F.
 resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
   ?lift(Obj#krc_obj{ val     = ?unlift(s2_maybe:reduce(F, Vs))
-                   , indices = lists:usort(lists:flatten(Is))
+                   , indices = ?unlift(s2_maybe:reduce(F, Is))
                    }).
 
 %%%_ * Representation --------------------------------------------------
 %% On-disk (we allow arbitrary terms, Riak stores binaries; these are
 %% used for bucket names, keys, and values).
--spec encode(_)                -> binary().
-encode(X)                      -> term_to_binary(X).
+-spec encode(binary)           -> binary().
+encode(X)                      -> X.
 
 -spec decode(binary())         -> _.
 decode(<<>>)                   -> ?TOMBSTONE;
-decode(X)                      -> binary_to_term(X).
+decode(X)                      -> X.
 
 %% Index names (Riak uses strings with a type suffix; we determine the
 %% index type based on the type of the index key, and allow any Erlang
@@ -182,41 +182,25 @@ decode(X)                      -> binary_to_term(X).
 encode_index({'$bucket',
               '$bucket'})      -> {<<"$bucket">>, <<"$bucket">>};
 encode_index({Idx, Key})
-  when is_integer(Key)         -> {encode_idx(Idx,"int"), encode_int_key(Key)};
-encode_index({Idx, Key})       -> {encode_idx(Idx,"bin"), encode_bin_key(Key)}.
+  when is_integer(Key)         -> {encode_idx(Idx,<<"int">>), Key};
+encode_index({Idx, Key})       -> {encode_idx(Idx,<<"bin">>), Key}.
 
 -spec decode_index({binary(), binary()})
                                -> {_, _}.
 decode_index({Idx, Key})       -> case decode_idx(Idx) of
-                                    {"int", Name} -> {Name, decode_int_key(Key)};
-                                    {"bin", Name} -> {Name, decode_bin_key(Key)}
+                                    {<<"int">>, Name} -> {Name, Key};
+                                    {<<"bin">>, Name} -> {Name, Key}
                                   end.
 
 -spec encode_idx(_, string())  -> binary().
-encode_idx(Name, Suffix)       -> ?l2b(add_suffix(s2_hex:encode(Name),
-                                                  Suffix)).
+encode_idx(Name, Suffix)       -> add_suffix(Name, Suffix).
 
 -spec decode_idx(binary())     -> _.
-decode_idx(Name)               -> {Suffix, Rest} = drop_suffix(?b2l(Name)),
-                                  {Suffix, s2_hex:decode(Rest)}.
+decode_idx(Name)               -> drop_suffix(Name).
 
-add_suffix(Str, Suffix)        -> Str ++ "_" ++ Suffix.
-drop_suffix(Str)               -> [A, B, C, $_|Rest] = lists:reverse(Str),
-                                  {lists:reverse([A, B, C]), lists:reverse(Rest)}.
-
-%% Index entries (must be ASCII strings in Riak, any Erlang term in KRC).
--spec encode_int_key(integer())
-                               -> binary().
-encode_int_key(Entry)          -> ?l2b(?i2l(Entry)).
-
--spec decode_int_key(binary()) -> integer().
-decode_int_key(Entry)          -> ?l2i(?b2l(Entry)).
-
--spec encode_bin_key(_)        -> binary().
-encode_bin_key(Entry)          -> ?l2b(s2_hex:encode(Entry)).
-
--spec decode_bin_key(binary()) -> _.
-decode_bin_key(Entry)          -> s2_hex:decode(?b2l(Entry)).
+add_suffix(Str, Suffix)        -> <<Str/binary, $_, Suffix/binary>>.
+drop_suffix(Str)               -> { binary:part(Str, {byte_size(Str), -3})
+                                  , <<Str:(byte_size(Str)-4)/binary>> }.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
@@ -254,20 +238,6 @@ indices_test() ->
 
   {ok, KrcObj} = resolve(from_riakc_obj(RiakcObj), resolver()),
   I            = indices(KrcObj).
-
-enc_dec_idx_test() ->
-  X = {foo, "bar", <<"baz">>},
-  {"bin", X} = decode_idx(encode_idx(X, "bin")),
-  Y = {X, foo},
-  Y = decode_index(encode_index(Y)),
-  Z = {X, 123},
-  Z = decode_index(encode_index(Z)).
-
-enc_dec_idx_key_test() ->
-  X = {123, '$ % ^', make_ref()},
-  X = decode_bin_key(encode_bin_key(X)),
-  Y = 123,
-  Y = decode_int_key(encode_int_key(Y)).
 
 coverage_test() ->
   Obj        = new(foo, bar, baz),
