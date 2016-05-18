@@ -22,30 +22,16 @@
 %%%_* Module declaration ===============================================
 -module(krc_riak_client).
 
-%%%_* Exports ==========================================================
--export([ behaviour_info/1
-        ]).
-
-%%%_* Includes =========================================================
-%%-include_lib("").
-
-%%%_* Code =============================================================
-behaviour_info(callbacks) ->
-  [ {delete,     5}
-  , {get,        5}
-  , {get_index,  5}
-  , {put,        4}
-  , {start_link, 3}
-  ];
-behaviour_info(_) -> undefined.
+%%%_* Behaviour ========================================================
+-callback delete(_, _, _, _, _)    -> _.
+-callback get(_, _, _, _, _)       -> _.
+-callback get_index(_, _, _, _, _) -> _.
+-callback put(_, _, _, _)          -> _.
+-callback start_link(_, _, _)      -> _.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-
-coverage_test() ->
-  [_|_]     = behaviour_info(callbacks),
-  undefined = behaviour_info(undefined).
 
 -endif.
 

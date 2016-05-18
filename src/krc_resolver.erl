@@ -23,10 +23,6 @@
 -module(krc_resolver).
 
 %%%_* Exports ==========================================================
-%% Behaviour
--export([ behaviour_info/1
-        ]).
-
 %% API
 -export([ compose/1
         ]).
@@ -44,11 +40,7 @@
 -type resolver()             :: module().
 
 %%%_ * Behaviour -------------------------------------------------------
-%%-callback resolve(A, A) -> maybe(A, _).
-behaviour_info(callbacks) ->
-  [ {resolve, 2}
-  ];
-behaviour_info(_) -> undefined.
+-callback resolve(A, A) -> maybe(A, _).
 
 %%%_ * API -------------------------------------------------------------
 -spec compose([resolver()]) -> resolution_procedure().

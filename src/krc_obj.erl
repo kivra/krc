@@ -88,18 +88,37 @@
 -spec new(_, _, _)           -> ect().
 new(B, K, V)                 -> #krc_obj{bucket=B, key=K, val=V}.
 
+-spec bucket(ect()) -> bucket().
 bucket(#krc_obj{bucket=B})   -> B.
+
+-spec key(ect()) -> key().
 key(#krc_obj{key=K})         -> K.
+
+-spec val(ect()) -> val().
 val(#krc_obj{val=V})         -> V.
+
+-spec indices(ect()) -> indices().
 indices(#krc_obj{indices=I}) -> I.
+
+-spec vclock(ect()) -> _.
 vclock(#krc_obj{vclock=C})   -> C.
+
+-spec siblings(ect()) -> boolean().
 siblings(Obj)                -> length(val(Obj)) =/= 1.
 
+-spec set_bucket(ect(), bucket()) -> ect().
 set_bucket(Obj, B)           -> Obj#krc_obj{bucket=B}.
+
+-spec set_val(ect(), val()) -> ect().
 set_val(Obj, V)              -> Obj#krc_obj{val=V}.
+
+-spec set_vclock(ect(), _) -> ect().
 set_vclock(Obj, C)           -> Obj#krc_obj{vclock=C}.
+
+-spec set_indices(ect(), indices()) -> ect().
 set_indices(Obj, I)          -> ?hence(is_indices(I)), Obj#krc_obj{indices=I}.
 
+-spec is_indices(_) -> boolean().
 is_indices(I)                -> lists:all(fun is_idx/1, I).
 is_idx({_, _})               -> true;
 is_idx(_)                    -> false.
@@ -160,6 +179,7 @@ decode_indices(MD) ->
 
 %% @doc Resolve conflicts by computing the LUB of all values and
 %% indices under F.
+-spec resolve(ect(), fun((_, _) -> maybe(_, _))) -> maybe(ect(), _).
 resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
   ?lift(Obj#krc_obj{ val     = ?unlift(s2_maybe:reduce(F, Vs))
                    , indices = ?unlift(s2_maybe:reduce(F, Is))
@@ -192,7 +212,7 @@ decode_index({Idx, Key})       -> case decode_idx(Idx) of
                                     {<<"bin">>, Name} -> {Name, Key}
                                   end.
 
--spec encode_idx(_, string())  -> binary().
+-spec encode_idx(_, binary())  -> binary().
 encode_idx(Name, Suffix)       -> add_suffix(Name, Suffix).
 
 -spec decode_idx(binary())     -> _.
