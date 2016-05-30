@@ -272,9 +272,10 @@ connection(Client, Pid, Daddy) ->
       case {s2_procs:is_up(Caller), time_left(TS)>0} of
         {true, true} ->
           case ?lift(do(Client, Pid, Req)) of
-            {error, disconnected} ->
-              %% special case due to shitty overload protection on riak side?
-              %% request will possibly be retried
+            {error, disconnected} = Err ->
+              ?error("disconnected", []),
+              ?increment([requests, disconnects]),
+              gen_server:reply(From, Err),
               exit(disconnected);
             {error, timeout} = Err ->
               ?error("timeout", []),
