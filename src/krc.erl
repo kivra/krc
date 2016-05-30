@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc K Riak Client.
 %%%
-%%% Copyright 2013-2014 Kivra AB
+%%% Copyright 2013-2016 Kivra AB
 %%% Copyright 2011-2013 Klarna AB
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
@@ -82,24 +82,35 @@ get(S, B, K, F) when is_function(F) ->
 
 get_loop(S, B, K, F) ->
   get_loop(1, get_tries(), S, B, K, F).
-get_loop(I, N, S, B, K, F) when N >= I ->
+get_loop(I, N, S, B, K, F) when N > I ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
       case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
         {Ret,        false} -> Ret;
         {{error, _} = E, _} -> E;
-        {Ret, true}         ->
-              ?increment([resolve, ok]),
-              Ret
+        {Ret, true}         -> ?increment([resolve, ok]), Ret
       end;
     {error, notfound} ->
-      ?debug("{~p, ~p} not found, attempt ~p of ~p", [B, K, I, N]),
-      ?increment([reads, retries]),
+      ?increment([read, retries]),
       timer:sleep(retry_wait_ms()),
       get_loop(I+1, N, S, B, K, F);
-    {error, _} = Err -> Err
+    {error, Rsn}      ->
+      ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
+      ?increment([read, retries]),
+      timer:sleep(retry_wait_ms()),
+      get_loop(I+1, N, S, B, K, F)
   end;
-get_loop(I, N, _, _, _, _) when N < I -> {error, notfound}.
+get_loop(I, N, S, B, K, F) when N =:= I ->
+  case krc_server:get(S, B, K) of
+    {ok, Obj} ->
+      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
+        {Ret,        false} -> Ret;
+        {{error, _} = E, _} -> E;
+        {Ret, true}         -> ?increment([resolve, ok]), Ret
+      end;
+    {error, _}=Err ->
+      Err
+  end.
 
 -spec get_bucket(server(), bucket()) -> maybe(bucket_props(), _).
 get_bucket(S, B) ->
@@ -144,13 +155,43 @@ list_keys(S, B) -> krc_server:list_keys(S, B).
 -spec put(server(), obj())          -> whynot(_).
 -spec put(server(), obj(), props()) -> whynot(_).
 %% @doc Store O.
-put(S, O)       -> krc_server:put(S, O).
-put(S, O, Opts) -> krc_server:put(S, O, Opts).
+put(S, O)       -> put_loop(S, O).
+put(S, O, Opts) -> put_loop(S, O, Opts).
+
+put_loop(S, O) ->
+  put_loop(1, put_tries(), S, O).
+put_loop(I, N, S, O) when N > 1 ->
+  case krc_server:put(S, O) of
+    ok           -> ok;
+    {ok, _}=Ret  -> Ret;
+    {error, Rsn} ->
+      ?error("put error: ~p, attempt ~p of ~p", [Rsn, I, N]),
+      ?increment([put, retries]),
+      timer:sleep(retry_wait_ms()),
+      put_loop(I+1, N, S, O)
+  end;
+put_loop(I, N, S, O) when N =:= I ->
+  krc_server:put(S, O).
+
+put_loop(S, O, Opts) ->
+  put_loop(1, put_tries(), S, O, Opts).
+put_loop(I, N, S, O, Opts) when N > 1 ->
+  case krc_server:put(S, O, Opts) of
+    ok           -> ok;
+    {ok, _}=Ret  -> Ret;
+    {error, Rsn} ->
+      ?error("put error: ~p, attempt ~p of ~p", [Rsn, I, N]),
+      ?increment([put, retries]),
+      timer:sleep(retry_wait_ms()),
+      put_loop(I+1, N, S, O, Opts)
+  end;
+put_loop(I, N, S, O, Opts) when N =:= I ->
+  krc_server:put(S, O, Opts).
 
 -spec put_index(server(), obj(), krc_obj:indices()) -> whynot(_).
 %% @doc Add O to Indices and store it.
 put_index(S, O, Indices) when is_list(Indices) ->
-  krc_server:put(S, krc_obj:set_indices(O, Indices)).
+  put(S, krc_obj:set_indices(O, Indices)).
 
 -spec set_bucket(server(), bucket(), bucket_props()) -> whynot(_).
 %% @doc Set bucket properties P.
@@ -163,6 +204,9 @@ set_bucket(S, B, P) ->
 %%%_ * Internals -------------------------------------------------------
 %% @doc We automatically try to GET this many times.
 get_tries() -> s2_env:get_arg([], ?APP, get_tries, 3).
+
+%% @doc We automatically try to PUT this many times.
+put_tries() -> s2_env:get_arg([], ?APP, put_tries, 1).
 
 %% @doc This many ms in-between tries.
 retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).

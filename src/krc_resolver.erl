@@ -105,10 +105,6 @@ policy_test() ->
   {ok, 42} = R(42, 42),
   {error, {conflict, 42, 43, [nomatch, no_tombstone, defaulty]}} = R(42, 43).
 
-cover_test() ->
-  _ = behaviour_info(callbacks),
-  _ = behaviour_info(foo).
-
 -endif.
 
 %%%_* Emacs ============================================================
