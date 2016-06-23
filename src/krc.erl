@@ -175,7 +175,7 @@ put_loop(I, N, S, O) when N =:= I ->
 
 put_loop(S, O, Opts) ->
   put_loop(1, put_tries(), S, O, Opts).
-put_loop(I, N, S, O, Opts) when N > 1 ->
+put_loop(I, N, S, O, Opts) when N > I ->
   case krc_server:put(S, O, Opts) of
     ok           -> ok;
     {ok, _}=Ret  -> Ret;
