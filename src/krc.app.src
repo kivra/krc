@@ -2,6 +2,6 @@
                    , {vsn,          git}
                    , {modules,      []}
                    , {registered,   [krc_server]}
-                   , {applications, [kernel, stdlib]}
+                   , {applications, [kernel, stdlib, stdlib2, riakc]}
                    , {mod,          {krc_app, []}}
                    ]}.
