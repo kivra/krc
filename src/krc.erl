@@ -86,9 +86,12 @@ get_loop(I, N, S, B, K, F) when N > I ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
       case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,        false} -> Ret;
-        {{error, _} = E, _} -> E;
-        {Ret, true}         -> ?increment([resolve, ok]), Ret
+        {Ret,            false} -> Ret;
+        {{error, _} = E, _}     -> E;
+        {{ok, NewObj},   true}  ->
+          ?increment([resolve, ok]),
+          ok = put(S, NewObj),
+          get_loop(I+1, N, S, B, K, F)
       end;
     {error, notfound} ->
       ?increment([read, retries]),

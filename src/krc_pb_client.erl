@@ -101,19 +101,13 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
 list_keys(Pid, Bucket, Timeout) ->
     riakc_pb_socket:list_keys(Pid, krc_obj:encode(Bucket), Timeout).
 
-putwo(Pid, Obj, Options, Timeout) ->
-  case
-    riakc_pb_socket:put(Pid, krc_obj:to_riakc_obj(Obj), Options, Timeout)
-  of
-    ok               -> ok;
-    {ok, RObj}       -> {ok, krc_obj:from_riakc_obj(RObj)};
-    {error, _} = Err -> Err
-  end.
+putwo(Pid, Obj, Options, Timeout) -> put(Pid, Obj, Options, Timeout).
 put(Pid, Obj, Options, Timeout)   ->
   case
     riakc_pb_socket:put(Pid, krc_obj:to_riakc_obj(Obj), Options, Timeout)
   of
     ok               -> ok;
+    {ok, Res}        -> {ok, krc_obj:from_riakc_obj(Res)};
     {error, _} = Err -> Err
   end.
 

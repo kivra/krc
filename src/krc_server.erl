@@ -101,6 +101,7 @@
 
 %% Internal exports
 -export([ connection/3
+        , opts/1
         ]).
 
 %%%_* Includes =========================================================
