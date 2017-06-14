@@ -78,7 +78,8 @@
         ]).
 
 %% Riak API
--export([ delete/3
+-export([ delete/2
+        , delete/3
         , get/3
         , get_bucket/2
         , get_index/4
@@ -135,6 +136,7 @@
         }).
 
 %%%_ * API -------------------------------------------------------------
+delete(GS, O)                 -> call(GS, {delete,     [O]      }).
 delete(GS, B, K)              -> call(GS, {delete,     [B, K]   }).
 get(GS, B, K)                 -> call(GS, {get,        [B, K]   }).
 get_bucket(GS, B)             -> call(GS, {get_bucket, [B]      }).

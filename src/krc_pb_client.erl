@@ -24,7 +24,8 @@
 -behaviour(krc_riak_client).
 
 %%%_* Exports ==========================================================
--export([ delete/5
+-export([ delete/4
+        , delete/5
         , get/5
         , get_bucket/3
         , get_index/5
@@ -41,6 +42,14 @@
 -include_lib("riakc/include/riakc.hrl").
 
 %%%_* Code =============================================================
+delete(Pid, Obj, Options, Timeout) ->
+  case
+    riakc_pb_socket:delete_obj(Pid, krc_obj:to_riakc_obj(Obj), Options, Timeout)
+  of
+    ok               -> ok;
+    {error, _} = Err -> Err
+  end.
+
 delete(Pid, Bucket, Key, Options, Timeout) ->
   case
     riakc_pb_socket:delete(

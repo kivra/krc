@@ -25,7 +25,8 @@
 
 %%%_* Exports ==========================================================
 %% API
--export([ delete/3
+-export([ delete/2
+        , delete/3
         , get/3
         , get/4
         , get_bucket/2
@@ -65,6 +66,10 @@
 -type bucket_props() :: props().
 
 %%%_ * API -------------------------------------------------------------
+-spec delete(server(), obj()) -> whynot(_).
+%% @doc Delete O.
+delete(S, O) -> krc_server:delete(S, O).
+
 -spec delete(server(), bucket(), key()) -> whynot(_).
 %% @doc Delete K from B.
 delete(S, B, K) -> krc_server:delete(S, B, K).
