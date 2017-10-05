@@ -106,7 +106,7 @@ genidxkey()  -> gensym(index_key).
 genval()     -> gensym(val).
 
 gensym(Stem) -> s2_atoms:catenate([?MODULE, '_', Stem, '_', rand()]).
-rand()       -> crypto:rand_uniform(0, 1 bsl 128).
+rand()       -> rand:uniform(1 bsl 128) - 1.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
