@@ -60,7 +60,8 @@
 -type key()          :: krc_obj:key().
 -type idx()          :: krc_obj:idx().
 -type idx_key()      :: {match, _}
-                      | {range, integer(), integer()}.
+                      | {range, integer(), integer()}
+                      | {range, binary(), binary()}.
 -type obj()          :: krc_obj:ect().
 -type props()        :: [{Key :: atom(), Val :: any()} | atom()].
 -type bucket_props() :: props().
