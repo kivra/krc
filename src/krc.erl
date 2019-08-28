@@ -96,7 +96,12 @@ get_loop(I, N, S, B, K, F) when N > I ->
         {{error, _} = E, _}     -> E;
         {{ok, NewObj},   true}  ->
           ?increment([resolve, ok]),
-          ok = put(S, NewObj),
+          case krc_obj:val(NewObj) of
+            ?TOMBSTONE ->
+               ok = delete(S, NewObj);
+            _Val ->
+              ok = put(S, NewObj)
+          end,
           get_loop(I+1, N, S, B, K, F)
       end;
     {error, notfound} ->
