@@ -118,9 +118,16 @@ get_loop(I, N, S, B, K, F) when N =:= I ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
       case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,        false} -> Ret;
-        {{error, _} = E, _} -> E;
-        {Ret, true}         -> ?increment([resolve, ok]), Ret
+        {Ret,                false} -> Ret;
+        {{error, _} = E,     _}     -> E;
+        {{ok, NewObj} = Ret, true}  ->
+          ?increment([resolve, ok]),
+          case krc_obj:val(NewObj) of
+            ?TOMBSTONE ->
+              {error, notfound};
+            _Val ->
+              Ret
+          end
       end;
     {error, _}=Err ->
       Err
