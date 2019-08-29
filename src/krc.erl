@@ -97,10 +97,8 @@ get_loop(I, N, S, B, K, F) when N > I ->
         {{ok, NewObj},   true}  ->
           ?increment([resolve, ok]),
           case krc_obj:val(NewObj) of
-            ?TOMBSTONE ->
-               ok = delete(S, NewObj);
-            _Val ->
-              ok = put(S, NewObj)
+            ?TOMBSTONE -> ok = delete(S, NewObj);
+            _Val       -> ok = put(S, NewObj)
           end,
           get_loop(I+1, N, S, B, K, F)
       end;
@@ -123,10 +121,8 @@ get_loop(I, N, S, B, K, F) when N =:= I ->
         {{ok, NewObj} = Ret, true}  ->
           ?increment([resolve, ok]),
           case krc_obj:val(NewObj) of
-            ?TOMBSTONE ->
-              {error, notfound};
-            _Val ->
-              Ret
+            ?TOMBSTONE -> {error, notfound};
+            _Val       -> Ret
           end
       end;
     {error, _}=Err ->
