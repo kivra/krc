@@ -96,7 +96,10 @@ get_loop(I, N, S, B, K, F) when N > I ->
         {{error, _} = E, _}     -> E;
         {{ok, NewObj},   true}  ->
           ?increment([resolve, ok]),
-          ok = put(S, NewObj),
+          case krc_obj:val(NewObj) of
+            ?TOMBSTONE -> ok = delete(S, NewObj);
+            _Val       -> ok = put(S, NewObj)
+          end,
           get_loop(I+1, N, S, B, K, F)
       end;
     {error, notfound} ->
@@ -113,9 +116,14 @@ get_loop(I, N, S, B, K, F) when N =:= I ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
       case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,        false} -> Ret;
-        {{error, _} = E, _} -> E;
-        {Ret, true}         -> ?increment([resolve, ok]), Ret
+        {Ret,                false} -> Ret;
+        {{error, _} = E,     _}     -> E;
+        {{ok, NewObj} = Ret, true}  ->
+          ?increment([resolve, ok]),
+          case krc_obj:val(NewObj) of
+            ?TOMBSTONE -> {error, notfound};
+            _Val       -> Ret
+          end
       end;
     {error, _}=Err ->
       Err
