@@ -103,9 +103,7 @@ get_loop(I, N, S, B, K, F) when N > I ->
           get_loop(I+1, N, S, B, K, F)
       end;
     {error, notfound} ->
-      ?increment([read, retries]),
-      timer:sleep(retry_wait_ms()),
-      get_loop(I+1, N, S, B, K, F);
+      {error, notfound};
     {error, Rsn}      ->
       ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
       ?increment([read, retries]),
