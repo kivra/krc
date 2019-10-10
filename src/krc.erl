@@ -146,7 +146,7 @@ get_index(S, B, I, K, Strat) ->
     end,
   s2_par:map(fun(Key) -> get(S, B, Key, Strat) end,
              Keys,
-             [{errors, false}, {chunksize, 100}]).
+             [{errors, false}, {workers, 10}]).
 
 
 -spec get_index_keys(server(), bucket(), idx(), idx_key()) ->
