@@ -85,7 +85,7 @@ get(S, B, K, Policy) when is_atom(Policy) ->
   get(S, B, K, krc_resolver:compose(Policy:lookup(B, K)));
 get(S, B, K, F) when is_function(F) ->
   case K of
-    <<>> -> {error, <<"Key cannot be zero-length">>};
+    <<>> -> {error, empty_key};
     _ -> get_loop(S, B, K, F)
   end.
 
