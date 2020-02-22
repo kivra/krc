@@ -107,6 +107,10 @@ get_loop(I, N, S, B, K, F) when N > I ->
       end;
     {error, notfound} ->
       {error, notfound};
+    %% This shouldn't happen since we are stoping requests with empty key
+    %% but anyway we shouldn't retry if the error was due to empty key.
+    {error, <<"Key cannot be zero-length">>} = Err ->
+      Err;
     {error, Rsn}      ->
       ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
       ?increment([read, retries]),
