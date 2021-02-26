@@ -201,6 +201,7 @@ decode(X)                      -> X.
 -spec encode_index({_, _})     -> {binary(), binary()}.
 encode_index({'$bucket',
               '$bucket'})      -> {<<"$bucket">>, <<"$bucket">>};
+encode_index({'$bucket', Key}) -> {<<"$bucket">>, Key};
 encode_index({Idx, Key})
   when is_integer(Key)         -> {encode_idx(Idx,<<"int">>), Key};
 encode_index({Idx, Key})       -> {encode_idx(Idx,<<"bin">>), Key}.
