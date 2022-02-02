@@ -77,17 +77,32 @@ get_bucket(Pid, Bucket, Timeout) ->
     {error, _} = Err -> Err
   end.
 
+% Similar to https://github.com/kivra/riak-erlang-client/blob/master/src/riakc_utils.erl#L29
+wait_for_list(ReqId) ->
+  wait_for_list(ReqId, []).
+wait_for_list(ReqId, Acc) ->
+  receive
+    {ReqId, {done, undefined}}   -> {ok, lists:flatten(Acc)};
+    {ReqId, {error, Reason}}     -> {error, Reason};
+    {ReqId, Res} -> wait_for_list(ReqId, [Res?INDEX_STREAM_RESULT.keys | Acc])
+  end.
+
+handle_stream(ReqId) ->
+  case wait_for_list(ReqId) of
+    {ok, Res}        ->  {ok, [krc_obj:decode(K) || K <- Res]};
+    {error, _} = Err -> Err
+  end.
+
 get_index(Pid, Bucket, Index, Key, Timeout) ->
   {Idx, IdxKey} = krc_obj:encode_index({Index, Key}),
   case
-    riakc_pb_socket:get_index(Pid,
-                              krc_obj:encode(Bucket),
-                              Idx,
-                              IdxKey,
-                              Timeout,
-                              infinity) %gen_server call
+    riakc_pb_socket:get_index_eq(Pid,
+                                 krc_obj:encode(Bucket),
+                                 Idx,
+                                 IdxKey,
+                                 [{timeout, Timeout}, {stream, true}])
   of
-    {ok, Res}        -> {ok, [krc_obj:decode(K) || K <- Res?INDEX_RESULTS.keys]};
+    {ok, ReqId}      -> handle_stream(ReqId);
     {error, _} = Err -> Err
   end.
 
@@ -95,15 +110,14 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
   {Idx, LowerKey} = krc_obj:encode_index({Index, Lower}),
   {Idx, UpperKey} = krc_obj:encode_index({Index, Upper}),
   case
-    riakc_pb_socket:get_index(Pid,
-                              krc_obj:encode(Bucket),
-                              Idx,
-                              LowerKey,
-                              UpperKey,
-                              Timeout,
-                              infinity) %gen_server call
+    riakc_pb_socket:get_index_range(Pid,
+                                    krc_obj:encode(Bucket),
+                                    Idx,
+                                    LowerKey,
+                                    UpperKey,
+                                    [{timeout, Timeout}, {stream, true}])
   of
-    {ok, Res}        ->  {ok, [krc_obj:decode(K) || K <- Res?INDEX_RESULTS.keys]};
+    {ok, ReqId}        ->  handle_stream(ReqId);
     {error, _} = Err -> Err
   end.
 
