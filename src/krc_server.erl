@@ -85,6 +85,7 @@
         , get_index/4
         , get_index/5
         , get_index/6
+        , get_map/3
         , list_keys/2
         , put/2
         , put/3
@@ -124,7 +125,7 @@
         , pids       :: [pid()]            %Connections
         , failures=0 :: non_neg_integer()  %Connection crash counter
         , free       :: [pid()]
-        , busy=[]    :: [pid()]
+        , busy=[]    :: [{pid(), term()}]
         , queue=queue:new()
         }).
 
@@ -145,6 +146,7 @@ get_index(GS, B, I, K, T)
            when is_integer(T) -> call(GS, {get_index,  [B, I, K], T}, T);
 get_index(GS, B, I, L, U)     -> call(GS, {get_index,  [B, I, L, U]}).
 get_index(GS, B, I, L, U, T)  -> call(GS, {get_index,  [B, I, L, U], T}, T).
+get_map(GS, B, K)             -> call(GS, {get_map,    [B, K]   }).
 list_keys(GS, B)              -> call(GS, {list_keys,  [B]}).
 put(GS, O)                    -> call(GS, {put,        [O]      }).
 put(GS, O, Opts)              -> call(GS, {putwo,      [O, Opts]}).
@@ -333,6 +335,7 @@ opts(delete)    -> [dopts()];
 opts(get)       -> [ropts()];
 opts(get_bucket)-> [];
 opts(get_index) -> [];
+opts(get_map)   -> [ropts()];
 opts(list_keys) -> [];
 opts(put)       -> [wopts()];
 opts(putwo)     -> [];

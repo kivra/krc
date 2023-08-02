@@ -30,6 +30,7 @@
         , get_bucket/3
         , get_index/5
         , get_index/6
+        , get_map/5
         , list_keys/3
         , put/4
         , putwo/4
@@ -121,18 +122,45 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
     {error, _} = Err -> Err
   end.
 
+get_map(Pid, Bucket, Key, Options, _Timeout) ->
+  case
+    riakc_pb_socket:fetch_type(Pid,
+                               {krc_map:bucket_type(), krc_obj:encode(Bucket)},
+                               krc_obj:encode(Key),
+                               Options)
+  of
+    {ok, Map}        -> {ok, krc_obj:from_map(Bucket, Key, Map)};
+    {error, _} = Err -> Err
+  end.
+
+
 list_keys(Pid, Bucket, Timeout) ->
     riakc_pb_socket:list_keys(Pid, krc_obj:encode(Bucket), Timeout).
 
 putwo(Pid, Obj, Options, Timeout) -> put(Pid, Obj, Options, Timeout).
 put(Pid, Obj, Options, Timeout)   ->
+  ObjType = krc_obj:type(Obj),
+  put(Pid, Obj, Options, Timeout, ObjType).
+
+put(Pid, Obj, Options, Timeout, object) ->
   case
     riakc_pb_socket:put(Pid, krc_obj:to_riakc_obj(Obj), Options, Timeout)
   of
     ok               -> ok;
     {ok, Res}        -> {ok, krc_obj:from_riakc_obj(Res)};
     {error, _} = Err -> Err
-  end.
+  end;
+put(Pid, Obj, Options, _Timeout, map) ->
+  Bucket = krc_obj:bucket(Obj),
+  Map = krc_obj:val(Obj),
+  Key = krc_obj:key(Obj),
+  riakc_pb_socket:update_type(
+    Pid,
+    {krc_map:bucket_type(), krc_obj:encode(Bucket)},
+    Key,
+    riakc_map:to_op(Map),
+    Options
+  ).
 
 set_bucket(Pid, Bucket, Props, Timeout) ->
   case

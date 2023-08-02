@@ -34,20 +34,24 @@
         , encode_index/1
         , from_riakc_obj/1
         , to_riakc_obj/1
+        , from_map/3
         ]).
 
 %% ADT
 -export([ new/3
+        , new/4
         , bucket/1
         , key/1
         , val/1
         , indices/1
         , vclock/1
+        , type/1
         , siblings/1
         , set_bucket/2
         , set_val/2
         , set_vclock/2
         , set_indices/2
+        , set_type/2
         ]).
 
 -export_type([ bucket/0
@@ -72,6 +76,7 @@
 -type idx()                  :: _.
 -type idx_key()              :: _.
 -type indices()              :: [{idx(), idx_key()}].
+-type obj_type()             :: object | map.
 
 %% #krc_obj.vclock is set to undefined; this is compatible with
 %% riakc_obj.erl (by inspection in late 2011).
@@ -81,12 +86,16 @@
         , val                :: val()     %/
         , indices=[]         :: indices() %KRC specific
         , vclock=undefined   :: _         %Riak internal
+        , type=object        :: obj_type()
         }).
 
 -opaque ect()                :: #krc_obj{}.
 
 -spec new(_, _, _)           -> ect().
 new(B, K, V)                 -> #krc_obj{bucket=B, key=K, val=V}.
+
+-spec new(_, _, _, _)        -> ect().
+new(B, K, V, T)              -> #krc_obj{bucket=B, key=K, val=V, type=T}.
 
 -spec bucket(ect()) -> bucket().
 bucket(#krc_obj{bucket=B})   -> B.
@@ -103,6 +112,9 @@ indices(#krc_obj{indices=I}) -> I.
 -spec vclock(ect()) -> _.
 vclock(#krc_obj{vclock=C})   -> C.
 
+-spec type(ect()) -> obj_type().
+type(#krc_obj{type=T})       -> T.
+
 -spec siblings(ect()) -> boolean().
 siblings(Obj)                -> length(val(Obj)) =/= 1.
 
@@ -114,6 +126,9 @@ set_val(Obj, V)              -> Obj#krc_obj{val=V}.
 
 -spec set_vclock(ect(), _) -> ect().
 set_vclock(Obj, C)           -> Obj#krc_obj{vclock=C}.
+
+-spec set_type(ect(), object | map) -> ect().
+set_type(Obj, T)             -> Obj#krc_obj{type=T}.
 
 -spec set_indices(ect(), indices()) -> ect().
 set_indices(Obj, I)          -> ?hence(is_indices(I)), Obj#krc_obj{indices=I}.
@@ -158,6 +173,17 @@ from_riakc_obj(Obj) ->
           , indices = [decode_indices(MD) || {MD, _} <- Contents]
           , vclock  = riakc_obj:vclock(Obj) %opaque
           }.
+
+-spec from_map(bucket(), key(), riakc_datatype:datatype()) -> ect() | no_return().
+from_map(Bucket, Key, {map, _, _, _, Ctx} = Map) ->
+  #krc_obj{ bucket  = decode(Bucket)
+          , key     = decode(Key)
+          , val     = krc_map:to_list(Map)
+          , vclock  = Ctx
+          , type    = map
+          };
+from_map(_, _, _) ->
+  throw(bad_map).
 
 
 %% We're only interested in index-metadata.
