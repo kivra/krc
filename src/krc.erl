@@ -90,47 +90,39 @@ get(S, B, K, F) when is_function(F) ->
   end.
 
 get_loop(S, B, K, F) ->
-  get_loop(1, get_tries(), S, B, K, F).
-get_loop(I, N, S, B, K, F) when N > I ->
+  get_loop(1, get_tries(), S, B, K, F, false).
+get_loop(I, N, S, B, K, F, R) ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
-      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,            false} -> Ret;
-        {{error, _} = E, _}     -> E;
-        {{ok, NewObj},   true}  ->
+      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj), R} of
+        {Ret, false, _} -> Ret; % No resolve needed
+        {{error, _} = E, _, _} -> E; % Resolve failed
+        {{ok, NewObj}, true, false} -> % First resolve
           ?increment([resolve, ok]),
           case krc_obj:val(NewObj) of
             ?TOMBSTONE -> ok = delete(S, NewObj);
             _Val       -> ok = put(S, NewObj)
           end,
-          get_loop(I+1, N, S, B, K, F)
-      end;
-    {error, notfound} ->
-      {error, notfound};
-    %% This shouldn't happen since we are stoping requests with empty key
-    %% but anyway we shouldn't retry if the error was due to empty key.
-    {error, <<"Key cannot be zero-length">>} = Err ->
-      Err;
-    {error, Rsn}      ->
-      ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
-      ?increment([read, retries]),
-      timer:sleep(retry_wait_ms()),
-      get_loop(I+1, N, S, B, K, F)
-  end;
-get_loop(I, N, S, B, K, F) when N =:= I ->
-  case krc_server:get(S, B, K) of
-    {ok, Obj} ->
-      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,                false} -> Ret;
-        {{error, _} = E,     _}     -> E;
-        {{ok, NewObj} = Ret, true}  ->
+          get_loop(I, N, S, B, K, F, true);
+        {{ok, NewObj} = Ret, true, true} -> % Second resolve
           ?increment([resolve, ok]),
           case krc_obj:val(NewObj) of
             ?TOMBSTONE -> {error, notfound};
             _Val       -> Ret
           end
       end;
-    {error, _}=Err ->
+    {error, notfound} ->
+      {error, notfound};
+    %% This shouldn't happen since we are stopping requests with empty key
+    %% but anyway we shouldn't retry if the error was due to empty key.
+    {error, <<"Key cannot be zero-length">>} = Err ->
+      Err;
+    {error, Rsn} when N > I ->
+      ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
+      ?increment([read, retries]),
+      timer:sleep(retry_wait_ms()),
+      get_loop(I+1, N, S, B, K, F, R);
+    {error, _} = Err when N =:= I ->
       Err
   end.
 
