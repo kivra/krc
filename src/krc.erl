@@ -102,7 +102,7 @@ get_loop(I, N, S, B, K, F) ->
           case krc_obj:val(NewObj) of
             ?TOMBSTONE -> ok = delete(S, NewObj),
                           {error, notfound};
-            _Val       -> {ok, VObj} = put(S, NewObj, write_back_put_opts()),
+            _Val       -> {ok, VObj} = put(S, NewObj, write_back_opts()),
                           {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))}
           end
       end;
@@ -222,8 +222,8 @@ retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).
 
 %% @docs Opts for the write-back of a resolved value. Return head so
 %%       that we obtain the new vector clock from the 'put'.
-write_back_put_opts() ->
-  krc_server:opts(put) ++ [return_head].
+write_back_opts() ->
+  krc_server:wopts() ++ [return_head].
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
