@@ -100,10 +100,12 @@ get_loop(I, N, S, B, K, F) ->
         {{ok, NewObj},   true}  ->
           ?increment([resolve, ok]),
           case krc_obj:val(NewObj) of
-            ?TOMBSTONE -> ok = delete(S, NewObj),
-                          {error, notfound};
-            _Val       -> {ok, VObj} = put(S, NewObj, write_back_opts()),
-                          {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))}
+            ?TOMBSTONE ->
+              ok = delete(S, NewObj),
+              {error, notfound};
+            _Val ->
+              {ok, VObj} = put(S, NewObj, write_back_opts()),
+              {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))}
           end
       end;
     {error, notfound} ->
