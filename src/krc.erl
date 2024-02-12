@@ -91,7 +91,7 @@ get(S, B, K, F) when is_function(F) ->
 
 get_loop(S, B, K, F) ->
   get_loop(1, get_tries(), S, B, K, F).
-get_loop(I, N, S, B, K, F) when N > I ->
+get_loop(I, N, S, B, K, F) ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
       case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
@@ -100,37 +100,26 @@ get_loop(I, N, S, B, K, F) when N > I ->
         {{ok, NewObj},   true}  ->
           ?increment([resolve, ok]),
           case krc_obj:val(NewObj) of
-            ?TOMBSTONE -> ok = delete(S, NewObj);
-            _Val       -> ok = put(S, NewObj)
-          end,
-          get_loop(I+1, N, S, B, K, F)
+            ?TOMBSTONE ->
+              ok = delete(S, NewObj),
+              {error, notfound};
+            _Val ->
+              {ok, VObj} = put(S, NewObj, write_back_opts()),
+              {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))}
+          end
       end;
     {error, notfound} ->
       {error, notfound};
-    %% This shouldn't happen since we are stoping requests with empty key
+    %% This shouldn't happen since we are stopping requests with empty key
     %% but anyway we shouldn't retry if the error was due to empty key.
     {error, <<"Key cannot be zero-length">>} = Err ->
       Err;
-    {error, Rsn}      ->
+    {error, Rsn} when N > I ->
       ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
       ?increment([read, retries]),
       timer:sleep(retry_wait_ms()),
-      get_loop(I+1, N, S, B, K, F)
-  end;
-get_loop(I, N, S, B, K, F) when N =:= I ->
-  case krc_server:get(S, B, K) of
-    {ok, Obj} ->
-      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,                false} -> Ret;
-        {{error, _} = E,     _}     -> E;
-        {{ok, NewObj} = Ret, true}  ->
-          ?increment([resolve, ok]),
-          case krc_obj:val(NewObj) of
-            ?TOMBSTONE -> {error, notfound};
-            _Val       -> Ret
-          end
-      end;
-    {error, _}=Err ->
+      get_loop(I+1, N, S, B, K, F);
+    {error, _} = Err when N =:= I ->
       Err
   end.
 
@@ -232,6 +221,11 @@ put_tries() -> s2_env:get_arg([], ?APP, put_tries, 1).
 
 %% @doc This many ms in-between tries.
 retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).
+
+%% @docs Opts for the write-back of a resolved value. Return head so
+%%       that we obtain the new vector clock from the 'put'.
+write_back_opts() ->
+  krc_server:wopts() ++ [return_head].
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
