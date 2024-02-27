@@ -104,8 +104,18 @@ get_loop(I, N, S, B, K, F) ->
               ok = delete(S, NewObj),
               {error, notfound};
             _Val ->
-              {ok, VObj} = put(S, NewObj, write_back_opts()),
-              {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))}
+              case put(S, NewObj, write_back_opts()) of
+                {ok, VObj} ->
+                  {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))};
+                %% No need for write-back during concurrent updates of the
+                %% object, it's actually even better to not create more
+                %% potential siblings at these times.
+                {error, <<"modified">>} ->
+                  {ok, NewObj};
+                {error, Rsn} ->
+                  ?error("Write-back after resolve failed, error: ~p", [B, K, Rsn]),
+                  {ok, NewObj}
+              end
           end
       end;
     {error, notfound} ->
@@ -222,10 +232,11 @@ put_tries() -> s2_env:get_arg([], ?APP, put_tries, 1).
 %% @doc This many ms in-between tries.
 retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).
 
-%% @docs Opts for the write-back of a resolved value. Return head so
-%%       that we obtain the new vector clock from the 'put'.
+%% @docs Opts for the write-back after resolve. Return head so that we
+%%       obtain the new vector clock from the 'put'. However, if the put
+%%       would generate a conflict (immediately) we want to fail the put.
 write_back_opts() ->
-  krc_server:wopts() ++ [return_head].
+  krc_server:wopts() ++ [return_head, if_not_modified].
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
