@@ -104,7 +104,7 @@ get_loop(I, N, S, B, K, F) ->
               ok = delete(S, NewObj),
               {error, notfound};
             _Val ->
-              case put(S, NewObj, write_back_opts()) of
+              case krc_server:put(S, NewObj, write_back_opts()) of
                 {ok, VObj} ->
                   {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))};
                 %% No need for write-back during concurrent updates of the

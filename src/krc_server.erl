@@ -289,6 +289,10 @@ connection(Client, Pid, Daddy) ->
               ?debug("notfound", []),
               ?increment([requests, notfound]),
               gen_server:reply(From, Err);
+            {error, <<"modified">>} = Err ->
+              ?debug("modified", []),
+              ?increment([requests, modified]),
+              gen_server:reply(From, Err);
             {error, Rsn} = Err ->
               ?error("error: ~p", [Rsn]),
               ?increment([requests, errors]),
