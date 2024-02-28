@@ -104,7 +104,7 @@ get_loop(I, N, S, B, K, F) ->
               ok = delete(S, NewObj),
               {error, notfound};
             _Val ->
-              case put(S, NewObj, write_back_opts()) of
+              case krc_server:put(S, NewObj, write_back_opts()) of
                 {ok, VObj} ->
                   {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))};
                 %% No need for write-back during concurrent updates of the
@@ -113,7 +113,7 @@ get_loop(I, N, S, B, K, F) ->
                 {error, <<"modified">>} ->
                   {ok, NewObj};
                 {error, Rsn} ->
-                  ?error("Write-back after resolve failed, error: ~p", [B, K, Rsn]),
+                  ?error("Write-back after resolve failed, error: ~p", [Rsn]),
                   {ok, NewObj}
               end
           end
