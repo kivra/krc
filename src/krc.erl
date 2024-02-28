@@ -113,7 +113,7 @@ get_loop(I, N, S, B, K, F) ->
                 {error, <<"modified">>} ->
                   {ok, NewObj};
                 {error, Rsn} ->
-                  ?error("Write-back after resolve failed, error: ~p", [B, K, Rsn]),
+                  ?error("Write-back after resolve failed, error: ~p", [Rsn]),
                   {ok, NewObj}
               end
           end
