@@ -95,10 +95,15 @@ get_loop(I, N, S, B, K, F) ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
       case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret,            false} -> Ret;
-        {{error, _} = E, _}     -> E;
-        {{ok, NewObj},   true}  ->
-          ?increment([resolve, ok]),
+        {Ret, false} -> Ret;
+        {{error, Reason} = E, _} ->
+          telemetry_event(
+            [get, conflict],
+            #{result => error, error => Reason, bucket => B, key => K}
+           ),
+          E;
+        {{ok, NewObj}, true} ->
+          telemetry_event([get, conflict], #{result => ok, bucket => B, key => K}),
           case krc_obj:val(NewObj) of
             ?TOMBSTONE ->
               ok = delete(S, NewObj),
@@ -126,7 +131,10 @@ get_loop(I, N, S, B, K, F) ->
       Err;
     {error, Rsn} when N > I ->
       ?error("{~p, ~p} error: ~p, attempt ~p of ~p", [B, K, Rsn, I, N]),
-      ?increment([read, retries]),
+      telemetry_event(
+        [get, retry],
+        #{retry => I, retry_limit => N, bucket => B, key => K, error => Rsn}
+       ),
       timer:sleep(retry_wait_ms()),
       get_loop(I+1, N, S, B, K, F);
     {error, _} = Err when N =:= I ->
@@ -187,7 +195,10 @@ put_loop(I, N, S, O) when N > I ->
     {ok, _}=Ret  -> Ret;
     {error, Rsn} ->
       ?error("put error: ~p, attempt ~p of ~p", [Rsn, I, N]),
-      ?increment([put, retries]),
+      telemetry_event(
+        [put, retry],
+        #{retry => I, retry_limit => N, bucket => krc_obj:bucket(O), key => krc_obj:key(O), error => Rsn}
+       ),
       timer:sleep(retry_wait_ms()),
       put_loop(I+1, N, S, O)
   end;
@@ -202,7 +213,10 @@ put_loop(I, N, S, O, Opts) when N > I ->
     {ok, _}=Ret  -> Ret;
     {error, Rsn} ->
       ?error("put error: ~p, attempt ~p of ~p", [Rsn, I, N]),
-      ?increment([put, retries]),
+      telemetry_event(
+        [put, retry],
+        #{retry => I, retry_limit => N, bucket => krc_obj:bucket(O), key => krc_obj:key(O), error => Rsn}
+       ),
       timer:sleep(retry_wait_ms()),
       put_loop(I+1, N, S, O, Opts)
   end;
@@ -237,6 +251,13 @@ retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).
 %%       would generate a conflict (immediately) we want to fail the put.
 write_back_opts() ->
   krc_server:wopts() ++ [return_head, if_not_modified].
+
+telemetry_event(Event, Data) ->
+  telemetry:execute(
+    [?MODULE | Event],
+    #{monotonic_time => erlang:monotonic_time(), system_time => erlang:system_time()},
+    Data
+   ).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
@@ -467,7 +488,6 @@ obj_eq(Obj0, Obj) ->
 
 
 vals(Objs) -> [krc_obj:val(O) || O <- Objs].
-
 -endif.
 
 %%%_* Emacs ============================================================

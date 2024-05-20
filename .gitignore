@@ -3,3 +3,5 @@
 .eunit
 doc
 /deps
+.emacs*
+_build
