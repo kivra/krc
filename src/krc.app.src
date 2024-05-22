@@ -6,6 +6,7 @@
                                     , stdlib
                                     , stdlib2
                                     , riakc
+                                    , prometheus
                                     , telemetry
                                     ]}
                    , {mod,          {krc_app, []}}
