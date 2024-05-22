@@ -10,6 +10,12 @@
 %%%_* Module declaration ===============================================
 -module(krc_prometheus).
 
+%%%_* Define ===========================================================
+%% Taken from
+%%    https://github.com/akoutmos/prom_ex/blob/master/lib/prom_ex/plugins/plug_router.ex#L191
+%% But we may want to redefine these depending on what we get in the metrics
+-define(BYTE_SIZE_BUCKETS, [64, 512, 4096, 65536, 262144, 1048576, 4194304, 16777216]).
+
 %%%_* Exports ==========================================================
 -export([declare_metrics/0]).
 -export([conflict_count/2]).
@@ -58,19 +64,13 @@ declare_metrics() ->
   prometheus_histogram:declare([
     {name, krc_request_size_bytes},
     {labels, [result, operation, bucket]},
-    %% Beware bucket resolution, but let's just use the defaults until we make an informed decision:
-    %% https://medium.com/mercari-engineering/have-you-been-using-histogram-metrics-correctly-730c9547a7a9
-    %% The default buckets are floats representing seconds.
-    {buckets, default},
+    {buckets, ?BYTE_SIZE_BUCKETS},
     {help, "Riak client request size"}
   ]),
   prometheus_histogram:declare([
     {name, krc_response_size_bytes},
     {labels, [result, operation, bucket]},
-    %% Beware bucket resolution, but let's just use the defaults until we make an informed decision:
-    %% https://medium.com/mercari-engineering/have-you-been-using-histogram-metrics-correctly-730c9547a7a9
-    %% The default buckets are floats representing seconds.
-    {buckets, default},
+    {buckets, ?BYTE_SIZE_BUCKETS},
     {help, "Riak client response size"}
   ]),
   ok.

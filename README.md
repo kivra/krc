@@ -50,4 +50,4 @@ The application emits the following `telemetry` events:
 
 - `[krc_pb_client, request, stop]` emitted at the end of a request to riak
   - Measurement: `#{duration => integer(), monotonic_time => integer()}`
-  - Metadata: `#{request => map(), response => ok | error, error => term()}`
+  - Metadata: `#{request => map(), response => map()}`
