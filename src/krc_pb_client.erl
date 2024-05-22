@@ -37,10 +37,8 @@
         , start_link/3
         ]).
 
-%%%_* Define ===========================================================
--define(TELEMETRY_EVENT, [?MODULE, request]).
-
 %%%_* Includes =========================================================
+-include_lib("krc/include/krc.hrl").
 -include_lib("stdlib2/include/prelude.hrl").
 -include_lib("riakc/include/riakc.hrl").
 
@@ -67,8 +65,7 @@ get_index(Pid, Bucket, Index, Key, Timeout) ->
   {Idx, IdxKey} = krc_obj:encode_index({Index, Key}),
   ExtraMetadata = #{index => Index, idx => Idx, idxkey => IdxKey},
   StartMetadata = metadata(Pid, get_index_eq, Bucket, Key, [], Timeout, ExtraMetadata),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp = riakc_pb_socket:get_index_eq(Pid,
@@ -85,8 +82,7 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
   {Idx, UpperKey} = krc_obj:encode_index({Index, Upper}),
   ExtraMetadata = #{index => Index, idx => Idx, lower_key => LowerKey, upper_key => UpperKey},
   StartMetadata = metadata(Pid, get_index_range, Bucket, undefined, [], Timeout, ExtraMetadata),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp =
@@ -102,19 +98,17 @@ get_index(Pid, Bucket, Index, Lower, Upper, Timeout) ->
 
 list_keys(Pid, Bucket, Timeout) ->
   StartMetadata = metadata(Pid, list_keys, Bucket, undefined, [], Timeout),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp = riakc_pb_socket:list_keys(Pid, krc_obj:encode(Bucket), Timeout),
         handle_resp(Resp, StartMetadata, fun(Keys) -> {ok, Keys} end)
     end
-  ).
+   ).
 
 get_bucket(Pid, Bucket, Timeout) ->
   StartMetadata = metadata(Pid, get_bucket, Bucket, undefined, [], Timeout),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp = riakc_pb_socket:get_bucket(Pid, krc_obj:encode(Bucket), Timeout),
@@ -129,8 +123,7 @@ get_bucket(Pid, Bucket, Timeout) ->
 set_bucket(Pid, Bucket, Props, Timeout) ->
   ExtraMetadata = #{props => Props},
   StartMetadata = metadata(Pid, set_bucket, Bucket, undefined, [], Timeout, ExtraMetadata),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp = riakc_pb_socket:set_bucket(Pid, krc_obj:encode(Bucket), Props, Timeout),
@@ -157,8 +150,7 @@ wait_for_list(ReqId, Acc) ->
 
 obj_exec(Pid, Op, Obj, Options, Timeout) ->
   StartMetadata = metadata(Pid, Op, Obj, Options, Timeout),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp =
@@ -169,8 +161,7 @@ obj_exec(Pid, Op, Obj, Options, Timeout) ->
 
 obj_exec(Pid, Op, Bucket, Key, Options, Timeout) ->
   StartMetadata = metadata(Pid, Op, Bucket, Key, Options, Timeout),
-  telemetry:span(
-    ?TELEMETRY_EVENT,
+  telemetry_span(
     StartMetadata,
     fun() ->
         Resp =
@@ -203,6 +194,9 @@ handle_resp({error, Reason}, StartMetadata, _DecodeRespFun) ->
   RespMetadata = #{response => #{result => error, error => Reason}},
   {{error, Reason}, maps:merge(StartMetadata, RespMetadata)}.
 
+telemetry_span(StartMetadata, Fun) ->
+  telemetry:span([?MODULE, request], StartMetadata, Fun).
+
 metadata(Pid, Op, Obj, Options, Timeout) ->
   ExtraMetadata = #{size => size_in_bytes(Obj)},
   metadata(Pid, Op, krc_obj:bucket(Obj), krc_obj:key(Obj), Options, Timeout, ExtraMetadata).
@@ -230,7 +224,10 @@ size_in_bytes(Data) ->
   end.
 
 krc_obj_size(Obj) ->
-  term_size(krc_obj:val(Obj)).
+  case krc_obj:val(Obj) of
+    [?TOMBSTONE] -> 0;
+    Value -> term_size(Value)
+  end.
 
 term_size(Data) when is_binary(Data) ->
   erlang:iolist_size(Data);
