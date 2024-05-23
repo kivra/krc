@@ -26,3 +26,28 @@ jakob@moody.primat.es:~/git/erlang/krc$ gmake test
 * krc_server.erl      -- worker pool
 * krc_sup.erl         -- supervisor
 * krc_test.erl        -- test support
+
+## Telemetry Events
+
+
+The application emits the following `telemetry` events:
+
+- `[krc, get, conflict]` emitted when a conflict has been encountered during read.
+  - Measurement: `#{monotonic_time => integer(), system_time => integer()}`
+  - Metadata: `#{result => ok | error, error => term(), bucket => B, key => K}`
+
+- `[krc, 'operation', retry]` (`operation` can be `get` or `put`) emitted when a get retry is made
+  - Measurement: `#{monotonic_time => integer(), system_time => integer()}`
+  - Metadata: `#{retry => positive_integer(), retry_limit => positive_integer(), bucket => binary(), key => binary(), error => term()}`
+
+- `[krc_server, process, error]` emitted when a process terminates
+  - Measurement: `#{monotonic_time => integer(), system_time => integer()}`
+  - Metadata: `#{pid => pid(), reason => term(), failure_count => non_neg_integer()}`
+
+- `[krc_server, request, stop]` emitted when a request terminates
+  - Measurement: `#{monotonic_time => integer(), system_time => integer()}`
+  - Metadata: `#{pid => pid(), client => atom(), daddy => pid(), result => ok | error, error => term()}`
+
+- `[krc_pb_client, request, stop]` emitted at the end of a request to riak
+  - Measurement: `#{duration => integer(), monotonic_time => integer()}`
+  - Metadata: `#{request => map(), response => map()}`

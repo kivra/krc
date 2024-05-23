@@ -125,7 +125,7 @@
         , pids       :: [pid()]            %Connections
         , failures=0 :: non_neg_integer()  %Connection crash counter
         , free       :: [pid()]
-        , busy=[]    :: [pid()]
+        , busy=[]    :: [{pid(), term()}]
         , queue=queue:new()
         }).
 
@@ -218,13 +218,19 @@ handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
   %% We assume that the system is restarted occasionally anyway (for upgrades
   %% and such), so we don't bother resetting the counter.
   ?critical("Krc EXIT ~p: ~p: too many failures", [Pid, Rsn]),
-  ?increment([exits, failures]),
+  telemetry_event(
+    [process, error],
+    #{pid => Pid, reason => Rsn, failure_count => N}
+   ),
   {stop, failures, S};
 handle_info({'EXIT', Pid, Rsn},
             #s{client=Client, ip=IP, port=Port, failures=N} = S) ->
   ?hence(lists:member(Pid, S#s.pids)),
   ?error("Krc EXIT ~p: ~p", [Pid, Rsn]),
-  ?increment([exits, other]),
+  telemetry_event(
+    [process, error],
+    #{pid => Pid, reason => Rsn, failure_count => N}
+   ),
   Busy1 =
     case lists:keytake(Pid, 1, S#s.busy) of
       {value, {Pid, #req{from=From}}, Busy0} ->
@@ -271,6 +277,8 @@ connection_start(Client, IP, Port, Daddy) ->
     connection(Client, Pid, Daddy))).
 
 connection(Client, Pid, Daddy) ->
+  Event = [request, stop],
+  Metadata = #{pid => Pid, client => Client, daddy => Daddy},
   receive
     {handle, #req{ts=TS, req=Req, from={Caller, _}=From}} ->
       case {s2_procs:is_up(Caller), time_left(TS)>0} of
@@ -278,38 +286,38 @@ connection(Client, Pid, Daddy) ->
           case ?lift(do(Client, Pid, Req)) of
             {error, disconnected} = Err ->
               ?error("disconnected", []),
-              ?increment([requests, disconnects]),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => disconnected})),
               gen_server:reply(From, Err),
               exit(disconnected);
             {error, timeout} = Err ->
               ?error("timeout", []),
-              ?increment([requests, timeouts]),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => timeout})),
               gen_server:reply(From, Err);
             {error, notfound} = Err ->
               ?debug("notfound", []),
-              ?increment([requests, notfound]),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => notfound})),
               gen_server:reply(From, Err);
             {error, <<"modified">>} = Err ->
               ?debug("modified", []),
-              ?increment([requests, modified]),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => modified})),
               gen_server:reply(From, Err);
             {error, Rsn} = Err ->
               ?error("error: ~p", [Rsn]),
-              ?increment([requests, errors]),
+              telemetry_event(Event,  maps:merge(Metadata, #{result => error, error => Rsn})),
               gen_server:reply(From, Err);
             {ok, ok} ->
-              ?increment([requests, ok]),
+              telemetry_event(Event, maps:put(result, ok, Metadata)),
               gen_server:reply(From, ok);
             {ok, _} = Ok ->
-              ?increment([requests, ok]),
+              telemetry_event(Event, maps:put(result, ok, Metadata)),
               gen_server:reply(From, Ok)
           end;
         {false, _} ->
           ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
-          ?increment([requests, dropped]);
+          telemetry_event(Event, maps:put(error, dropped, Metadata));
         {_, false} ->
           ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
-          ?increment([requests, out_of_time]),
+          telemetry_event(Event, maps:put(error, out_of_time, Metadata)),
           gen_server:reply(From, {error, timeout})
       end,
       Daddy ! {free, self()};
@@ -378,6 +386,13 @@ dopts() ->
   , {pw,              1}             % /
   , {dw,              quorum}        %/
   ].
+
+telemetry_event(Event, Data) ->
+  telemetry:execute(
+    [?MODULE | Event],
+    #{monotonic_time => erlang:monotonic_time(), system_time => erlang:system_time()},
+    Data
+   ).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).

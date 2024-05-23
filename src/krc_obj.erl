@@ -48,6 +48,7 @@
         , set_val/2
         , set_vclock/2
         , set_indices/2
+        , is_obj/1
         ]).
 
 -export_type([ bucket/0
@@ -102,6 +103,10 @@ indices(#krc_obj{indices=I}) -> I.
 
 -spec vclock(ect()) -> _.
 vclock(#krc_obj{vclock=C})   -> C.
+
+-spec is_obj(term()) -> boolean().
+is_obj(#krc_obj{}) -> true;
+is_obj(_) -> false.
 
 -spec siblings(ect()) -> boolean().
 siblings(Obj)                -> length(val(Obj)) =/= 1.
