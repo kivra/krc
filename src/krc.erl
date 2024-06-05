@@ -35,6 +35,8 @@
         , get_index_keys/4
         , get_index_keys/5
         , list_keys/2
+        , ping/1
+        , ping/2
         , put/2
         , put/3
         , put_index/3
@@ -191,6 +193,13 @@ get_index_keys(S, B, I, K, T) ->
 %% @doc Get all keys from a bucket B.
 list_keys(S, B) -> krc_server:list_keys(S, B).
 
+%% @doc Ping the server, using the default timeout.
+-spec ping(server()) -> pong.
+ping(S) -> riakc_pb_socket:ping(S).
+
+%% @doc Ping the server, using the specified timeout.
+-spec ping(server(), timeout()) -> pong.
+ping(S, Timeout) -> riakc_pb_socket:ping(S, Timeout).
 
 -spec put(server(), obj())          -> whynot(_).
 -spec put(server(), obj(), props()) -> whynot(_).
