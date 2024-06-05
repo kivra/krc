@@ -94,35 +94,7 @@ get_loop(S, B, K, F) ->
 get_loop(I, N, S, B, K, F) ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
-      case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-        {Ret, false} -> Ret;
-        {{error, Reason} = E, _} ->
-          telemetry_event(
-            [get, conflict],
-            #{result => error, error => Reason, bucket => B, key => K}
-           ),
-          E;
-        {{ok, NewObj}, true} ->
-          telemetry_event([get, conflict], #{result => ok, bucket => B, key => K}),
-          case krc_obj:val(NewObj) of
-            ?TOMBSTONE ->
-              ok = delete(S, NewObj),
-              {error, notfound};
-            _Val ->
-              case krc_server:put(S, NewObj, write_back_opts()) of
-                {ok, VObj} ->
-                  {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))};
-                %% No need for write-back during concurrent updates of the
-                %% object, it's actually even better to not create more
-                %% potential siblings at these times.
-                {error, <<"modified">>} ->
-                  {ok, NewObj};
-                {error, Rsn} ->
-                  ?error("Write-back after resolve failed, error: ~p", [Rsn]),
-                  {ok, NewObj}
-              end
-          end
-      end;
+      maybe_resolve_obj(S, B, K, F, Obj);
     {error, notfound} ->
       {error, notfound};
     %% This shouldn't happen since we are stopping requests with empty key
@@ -139,6 +111,37 @@ get_loop(I, N, S, B, K, F) ->
       get_loop(I+1, N, S, B, K, F);
     {error, _} = Err when N =:= I ->
       Err
+  end.
+
+maybe_resolve_obj(S, B, K, F, Obj) ->
+  case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
+    {Ret, false} -> Ret;
+    {{error, Reason} = E, _} ->
+      telemetry_event(
+        [get, conflict],
+        #{result => error, error => Reason, bucket => B, key => K}
+       ),
+      E;
+    {{ok, NewObj}, true} ->
+      telemetry_event([get, conflict], #{result => ok, bucket => B, key => K}),
+      case krc_obj:val(NewObj) of
+        ?TOMBSTONE ->
+          ok = delete(S, NewObj),
+          {error, notfound};
+        _Val ->
+          case krc_server:put(S, NewObj, write_back_opts()) of
+            {ok, VObj} ->
+              {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))};
+            %% No need for write-back during concurrent updates of the
+            %% object, it's actually even better to not create more
+            %% potential siblings at these times.
+            {error, <<"modified">>} ->
+              {ok, NewObj};
+            {error, Rsn} ->
+              ?error("Write-back after resolve failed, error: ~p", [Rsn]),
+              {ok, NewObj}
+          end
+      end
   end.
 
 -spec get_bucket(server(), bucket()) -> maybe(bucket_props(), _).
