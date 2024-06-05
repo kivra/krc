@@ -31,6 +31,7 @@
         , get_index/5
         , get_index/6
         , list_keys/3
+        , ping/2
         , put/4
         , putwo/4
         , set_bucket/4
@@ -56,6 +57,14 @@ delete(Pid, Bucket, Key, Options, Timeout) ->
 
 get(Pid, Bucket, Key, Options, Timeout) ->
   obj_exec(Pid, get, Bucket, Key, Options, Timeout).
+
+ping(Pid, Timeout) ->
+  try
+    pong = riakc_pb_socket:ping(Pid, Timeout),
+    ok
+  catch
+    _:Reason -> {error, Reason}
+  end.
 
 putwo(Pid, Obj, Options, Timeout) -> put(Pid, Obj, Options, Timeout).
 put(Pid, Obj, Options, Timeout)   ->

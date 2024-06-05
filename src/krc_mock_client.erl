@@ -31,6 +31,7 @@
         , get/5
         , get_index/5
         , get_index/6
+        , ping/2
         , put/4
         , start_link/3
         ]).
@@ -79,6 +80,7 @@ delete(P, B, K, Os, T)      -> call(P, {delete,    [B, K, Os, T]  }).
 get(P, B, K, Os, T)         -> call(P, {get,       [B, K, Os, T]  }).
 get_index(P, B, I, K, T)    -> call(P, {get_index, [B, I, K, T]   }).
 get_index(P, B, I, L, U, T) -> call(P, {get_index, [B, I, L, U, T]}).
+ping(P, T)                  -> call(P, {ping,      [T]            }).
 put(P, O, Os, T)            -> call(P, {put,       [O, Os, T]     }).
 
 %% Simulate Riak timeout via gen_server timeout.
@@ -139,6 +141,8 @@ do(get_index, [B, I, L, U, _], #s{idxs=Idxs} = S) ->
             end, [], [K || K <- dict:fetch_keys(Dict), L =< K, K =< U]);
         {error, notfound} -> {ok, []}
       end};
+do(ping, [_], S) ->
+  {S, ok};
 do(put, [O, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
   Bucket  = krc_obj:bucket(O),
   Key     = krc_obj:key(O),
