@@ -94,7 +94,7 @@ get_loop(S, B, K, F) ->
 get_loop(I, N, S, B, K, F) ->
   case krc_server:get(S, B, K) of
     {ok, Obj} ->
-      maybe_resolve_obj(S, B, K, F, Obj);
+      maybe_resolve_obj(S, B, K, F, Obj, true);
     {error, notfound} ->
       {error, notfound};
     %% This shouldn't happen since we are stopping requests with empty key
@@ -113,16 +113,16 @@ get_loop(I, N, S, B, K, F) ->
       Err
   end.
 
-maybe_resolve_obj(S, B, K, F, Obj) ->
-  case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj)} of
-    {Ret, false} -> Ret;
-    {{error, Reason} = E, _} ->
+maybe_resolve_obj(S, B, K, F, Obj, WB) ->
+  case {krc_obj:resolve(Obj, F), krc_obj:siblings(Obj), WB} of
+    {Ret, false, _} -> Ret;
+    {{error, Reason} = E, _, _} ->
       telemetry_event(
         [get, conflict],
         #{result => error, error => Reason, bucket => B, key => K}
        ),
       E;
-    {{ok, NewObj}, true} ->
+    {{ok, NewObj}, true, true} -> %% After first resolve
       telemetry_event([get, conflict], #{result => ok, bucket => B, key => K}),
       case krc_obj:val(NewObj) of
         ?TOMBSTONE ->
@@ -130,8 +130,8 @@ maybe_resolve_obj(S, B, K, F, Obj) ->
           {error, notfound};
         _Val ->
           case krc_server:put(S, NewObj, write_back_opts()) of
-            {ok, VObj} ->
-              {ok, krc_obj:set_vclock(NewObj, krc_obj:vclock(VObj))};
+            {ok, WBObj} ->
+              maybe_resolve_obj(S, B, K, F, WBObj, false);
             %% No need for write-back during concurrent updates of the
             %% object, it's actually even better to not create more
             %% potential siblings at these times.
@@ -141,6 +141,14 @@ maybe_resolve_obj(S, B, K, F, Obj) ->
               ?error("Write-back after resolve failed, error: ~p", [Rsn]),
               {ok, NewObj}
           end
+      end;
+    {{ok, NewObj}, true, false} -> %% After second resolve
+      telemetry_event([get, conflict], #{result => ok, bucket => B, key => K}),
+      case krc_obj:val(NewObj) of
+        ?TOMBSTONE ->
+          {error, notfound};
+        _Val ->
+          {ok, NewObj}
       end
   end.
 
@@ -249,11 +257,13 @@ put_tries() -> s2_env:get_arg([], ?APP, put_tries, 1).
 %% @doc This many ms in-between tries.
 retry_wait_ms() -> s2_env:get_arg([], ?APP, retry_wait_ms, 20).
 
-%% @docs Opts for the write-back after resolve. Return head so that we
-%%       obtain the new vector clock from the 'put'. However, if the put
-%%       would generate a conflict (immediately) we want to fail the put.
+%% @docs Opts for the write-back after resolve. If possible, we'd like the
+%%       put to fail if it would generate a conflict since we'd then be in
+%%       situation with concurrent updates and resolves. We also want to have
+%%       the body returned since it may have created a new conflict that we
+%%       need to resolve.
 write_back_opts() ->
-  krc_server:wopts() ++ [return_head, if_not_modified].
+  krc_server:wopts() ++ [return_body, if_not_modified].
 
 telemetry_event(Event, Data) ->
   telemetry:execute(
