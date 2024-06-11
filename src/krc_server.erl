@@ -86,6 +86,7 @@
         , get_index/5
         , get_index/6
         , list_keys/2
+        , ping/2
         , put/2
         , put/3
         , set_bucket/3
@@ -147,6 +148,7 @@ get_index(GS, B, I, K, T)
 get_index(GS, B, I, L, U)     -> call(GS, {get_index,  [B, I, L, U]}).
 get_index(GS, B, I, L, U, T)  -> call(GS, {get_index,  [B, I, L, U], T}, T).
 list_keys(GS, B)              -> call(GS, {list_keys,  [B]}).
+ping(GS, T)                   -> call(GS, {ping,       [], T}, T).
 put(GS, O)                    -> call(GS, {put,        [O]      }).
 put(GS, O, Opts)              -> call(GS, {putwo,      [O, Opts]}).
 set_bucket(GS, B, P)          -> call(GS, {set_bucket, [B, P]}).
@@ -347,6 +349,7 @@ opts(get)       -> [ropts()];
 opts(get_bucket)-> [];
 opts(get_index) -> [];
 opts(list_keys) -> [];
+opts(ping)      -> [];
 opts(put)       -> [wopts()];
 opts(putwo)     -> [];
 opts(set_bucket)-> [].

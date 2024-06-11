@@ -6,3 +6,5 @@ doc
 .emacs*
 _build
 *~
+.vscode/
+rebar.lock
