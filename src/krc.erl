@@ -77,8 +77,8 @@ delete(S, O) -> krc_server:delete(S, O).
 delete(S, B, K) -> krc_server:delete(S, B, K).
 
 
--spec get(server(), bucket(), key())             -> maybe(obj(), _).
--spec get(server(), bucket(), key(), strategy()) -> maybe(obj(), _).
+-spec get(server(), bucket(), key())             -> 'maybe'(obj(), _).
+-spec get(server(), bucket(), key(), strategy()) -> 'maybe'(obj(), _).
 %% @doc Fetch the object associated with K in B.
 get(S, B, K) ->
   get(S, B, K, krc_policy_default).
@@ -153,14 +153,14 @@ maybe_resolve_obj(S, B, K, F, Obj, WB) ->
       end
   end.
 
--spec get_bucket(server(), bucket()) -> maybe(bucket_props(), _).
+-spec get_bucket(server(), bucket()) -> 'maybe'(bucket_props(), _).
 get_bucket(S, B) ->
   krc_server:get_bucket(S, B).
 
 -spec get_index(server(), bucket(), idx(), idx_key()) ->
-                   maybe([obj()], _).
+                   'maybe'([obj()], _).
 -spec get_index(server(), bucket(), idx(), idx_key(), strategy()) ->
-                   maybe([obj()], _).
+                   'maybe'([obj()], _).
 %% @doc Get all objects tagged with I in bucket B.
 get_index(S, B, I, K) ->
   get_index(S, B, I, K, krc_policy_default).
@@ -176,7 +176,7 @@ get_index(S, B, I, K, Strat) ->
 
 
 -spec get_index_keys(server(), bucket(), idx(), idx_key()) ->
-                        maybe([key()], _).
+                        'maybe'([key()], _).
 %% @doc Get all keys tagged with I in bucket B.
 get_index_keys(S, B, I, K) ->
     get_index_keys(S, B, I, K, ?CALL_TIMEOUT).
@@ -188,7 +188,7 @@ get_index_keys(S, B, I, K, T) ->
   end.
 
 
--spec list_keys(server(), bucket()) -> maybe([key()], _).
+-spec list_keys(server(), bucket()) -> 'maybe'([key()], _).
 %% @doc Get all keys from a bucket B.
 list_keys(S, B) -> krc_server:list_keys(S, B).
 

@@ -184,7 +184,7 @@ decode_indices(MD) ->
 
 %% @doc Resolve conflicts by computing the LUB of all values and
 %% indices under F.
--spec resolve(ect(), fun((_, _) -> maybe(_, _))) -> maybe(ect(), _).
+-spec resolve(ect(), fun((_, _) -> 'maybe'(_, _))) -> 'maybe'(ect(), _).
 resolve(#krc_obj{val=Vs, indices=Is} = Obj, F) ->
   ?lift(Obj#krc_obj{ val     = ?unlift(s2_maybe:reduce(F, Vs))
                    , indices = ?unlift(s2_maybe:reduce(F, Is))

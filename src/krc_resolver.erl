@@ -36,11 +36,11 @@
 
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
--type resolution_procedure() :: fun((A, A) -> maybe(A, _)).
+-type resolution_procedure() :: fun((A, A) -> 'maybe'(A, _)).
 -type resolver()             :: module().
 
 %%%_ * Behaviour -------------------------------------------------------
--callback resolve(A, A) -> maybe(A, _).
+-callback resolve(A, A) -> 'maybe'(A, _).
 
 %%%_ * API -------------------------------------------------------------
 -spec compose([resolver()]) -> resolution_procedure().
