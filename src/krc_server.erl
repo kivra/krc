@@ -333,7 +333,7 @@ time_left(T0) ->
   ElapsedMs = (T1 - T0) / 1000,
   lists:max([?QUEUE_TIMEOUT - ElapsedMs, 0]).
 
--spec do(atom(), pid(), {atom(), [_]}) -> maybe(_, _).
+-spec do(atom(), pid(), {atom(), [_]}) -> 'maybe'(_, _).
 do(Client, Pid, {F, A}) ->
     do(Client, Pid, {F, A}, ?CALL_TIMEOUT);
 do(Client, Pid, {F, A, T}) ->
