@@ -1,0 +1,12 @@
+services:
+  riak:
+    image: basho/riak-kv:ubuntu-2.2.3
+    ports:
+      - 8081:8081
+    volumes:
+      - ./riak/user.conf:/etc/riak/user.conf
+    healthcheck:
+      test: riak-admin wait-for-service riak_kv
+      interval: 2s
+      timeout: 5s
+      retries: 10
