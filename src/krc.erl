@@ -470,7 +470,7 @@ conflict_ok_test() ->
     {ok, Obj} = get(krc_server,
                     B,
                     K,
-                    fun(V1, V2) -> erlang:max(V1, V2) end),
+                    fun(Val1, Val2) -> erlang:max(Val1, Val2) end),
     true      = erlang:max(V1, V2) =:= krc_obj:val(Obj)
   end).
 

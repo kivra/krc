@@ -363,7 +363,35 @@ opts(set_bucket)-> [].
 %% Connections
 copts() ->
   [ {auto_reconnect,  false}         %exit on TCP/IP error
-  ].
+  ] ++ sopts().
+
+%% Security options
+sopts() ->
+  RiakUser = application:get_env(?APP, riak_user, undefined),
+  RiakPass = application:get_env(?APP, riak_pass, ""),
+  CACert = application:get_env(?APP, riak_cacertfile, undefined),
+  SSLOpts = application:get_env(?APP, riak_ssl_opts, []),
+
+  %% Only used when using certificate-based authentication
+  RiakCertFile = application:get_env(?APP, riak_certfile, undefined),
+  RiakKeyFile = application:get_env(?APP, riak_keyfile, undefined),
+
+  RiakCerts =
+    case RiakCertFile =/= undefined andalso RiakKeyFile =/= undefined of
+      true -> [{certfile, RiakCertFile}, {keyfile, RiakKeyFile}];
+      false -> []
+    end,
+
+  %% These two options are the minimum required ones for security to work
+  case RiakUser =/= undefined andalso CACert =/= undefined of
+    true ->
+      [ {credentials, RiakUser, RiakPass}
+      , {cacertfile, CACert}
+      , {ssl_opts, SSLOpts}
+      | RiakCerts ];
+    false ->
+      []
+  end.
 
 %% Reads
 ropts() ->
