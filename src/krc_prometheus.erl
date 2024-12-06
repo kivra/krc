@@ -29,51 +29,51 @@
 %%%_* Code =============================================================
 -spec declare_metrics() -> ok.
 declare_metrics() ->
-  %% The names are chosen according to these guides:
-  %% https://github.com/deadtrickster/prometheus.erl/blob/master/doc/prometheus_time.md#description
-  %% https://prometheus.io/docs/practices/naming/#metric-names
-  prometheus_counter:declare([
-    {name, krc_conflict_total},
-    {labels, [result, bucket]},
-    {help, "Client conflict count"}
-  ]),
-  prometheus_counter:declare([
-    {name, krc_retries_total},
-    {labels, [operation, bucket]},
-    {help, "Client retry count per request"}
-  ]),
-  prometheus_counter:declare([
-    {name, krc_request_total},
-    {labels, [result, error]},
-    {help, "Client request count"}
-  ]),
-  prometheus_counter:declare([
-    {name, krc_process_error_total},
-    {labels, []},
-    {help, "Client process error count"}
-  ]),
-  prometheus_histogram:declare([
-    {name, krc_request_duration_seconds},
-    {labels, [result, operation, bucket]},
-    %% Beware bucket resolution, but let's just use the defaults until we make an informed decision:
-    %% https://medium.com/mercari-engineering/have-you-been-using-histogram-metrics-correctly-730c9547a7a9
-    %% The default buckets are floats representing seconds.
-    {buckets, default},
-    {help, "Client request duration"}
-  ]),
-  prometheus_histogram:declare([
-    {name, krc_request_size_bytes},
-    {labels, [result, operation, bucket]},
-    {buckets, ?BYTE_SIZE_BUCKETS},
-    {help, "Riak client request size"}
-  ]),
-  prometheus_histogram:declare([
-    {name, krc_response_size_bytes},
-    {labels, [result, operation, bucket]},
-    {buckets, ?BYTE_SIZE_BUCKETS},
-    {help, "Riak client response size"}
-  ]),
-  ok.
+    %% The names are chosen according to these guides:
+    %% https://github.com/deadtrickster/prometheus.erl/blob/master/doc/prometheus_time.md#description
+    %% https://prometheus.io/docs/practices/naming/#metric-names
+    prometheus_counter:declare([
+        {name, krc_conflict_total},
+        {labels, [result, bucket]},
+        {help, "Client conflict count"}
+    ]),
+    prometheus_counter:declare([
+        {name, krc_retries_total},
+        {labels, [operation, bucket]},
+        {help, "Client retry count per request"}
+    ]),
+    prometheus_counter:declare([
+        {name, krc_request_total},
+        {labels, [result, error]},
+        {help, "Client request count"}
+    ]),
+    prometheus_counter:declare([
+        {name, krc_process_error_total},
+        {labels, []},
+        {help, "Client process error count"}
+    ]),
+    prometheus_histogram:declare([
+        {name, krc_request_duration_seconds},
+        {labels, [result, operation, bucket]},
+        %% Beware bucket resolution, but let's just use the defaults until we make an informed decision:
+        %% https://medium.com/mercari-engineering/have-you-been-using-histogram-metrics-correctly-730c9547a7a9
+        %% The default buckets are floats representing seconds.
+        {buckets, default},
+        {help, "Client request duration"}
+    ]),
+    prometheus_histogram:declare([
+        {name, krc_request_size_bytes},
+        {labels, [result, operation, bucket]},
+        {buckets, ?BYTE_SIZE_BUCKETS},
+        {help, "Riak client request size"}
+    ]),
+    prometheus_histogram:declare([
+        {name, krc_response_size_bytes},
+        {labels, [result, operation, bucket]},
+        {buckets, ?BYTE_SIZE_BUCKETS},
+        {help, "Riak client response size"}
+    ]),
+    ok.
 
 -spec conflict_count(atom(), binary()) -> any().
 conflict_count(Result, Bucket) ->
@@ -94,22 +94,25 @@ process_error_count() ->
 -spec request_duration(pos_integer(), atom(), binary(), binary()) -> any().
 request_duration(DurationNative, Result, Op, Bucket) ->
     prometheus_histogram:observe(
-      krc_request_duration_seconds,
-      [Result, Op, Bucket], DurationNative
-     ).
+        krc_request_duration_seconds,
+        [Result, Op, Bucket],
+        DurationNative
+    ).
 
 -spec request_size(pos_integer(), atom(), binary(), binary()) -> any().
 request_size(SizeInBytes, Result, Op, Bucket) ->
     prometheus_histogram:observe(
-      krc_request_size_bytes,
-      [Result, Op, Bucket], SizeInBytes
-     ).
+        krc_request_size_bytes,
+        [Result, Op, Bucket],
+        SizeInBytes
+    ).
 
 -spec response_size(pos_integer(), atom(), binary(), binary()) -> any().
 response_size(SizeInBytes, Result, Op, Bucket) ->
     prometheus_histogram:observe(
-      krc_response_size_bytes,
-      [Result, Op, Bucket], SizeInBytes
-     ).
+        krc_response_size_bytes,
+        [Result, Op, Bucket],
+        SizeInBytes
+    ).
 
 %%%_* Private ==========================================================
