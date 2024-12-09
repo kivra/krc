@@ -3,5 +3,4 @@
 -export([lookup/2]).
 
 lookup(_Bucket, _Key) ->
-  [ krc_resolver_defaulty
-  ].
+    [krc_resolver_defaulty].

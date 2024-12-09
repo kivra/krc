@@ -1,13 +1,15 @@
-{application, krc, [ {description, "KRC"}
-                   , {vsn,          git}
-                   , {modules,      []}
-                   , {registered,   [krc_server]}
-                   , {applications, [ kernel
-                                    , stdlib
-                                    , stdlib2
-                                    , riakc
-                                    , prometheus
-                                    , telemetry
-                                    ]}
-                   , {mod,          {krc_app, []}}
-                   ]}.
+{application, krc, [
+    {description, "KRC"},
+    {vsn, git},
+    {modules, []},
+    {registered, [krc_server]},
+    {applications, [
+        kernel,
+        stdlib,
+        stdlib2,
+        riakc,
+        prometheus,
+        telemetry
+    ]},
+    {mod, {krc_app, []}}
+]}.

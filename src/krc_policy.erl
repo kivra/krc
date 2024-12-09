@@ -7,8 +7,11 @@
 -module(krc_policy).
 
 %%%_* Behaviour ========================================================
--callback lookup(_, _) -> [krc_resolver:resolver() |
-                           krc_resolver:resolution_procedure()].
+-callback lookup(_, _) ->
+    [
+        krc_resolver:resolver()
+        | krc_resolver:resolution_procedure()
+    ].
 
 %%%_* Emacs ============================================================
 %%% Local Variables:

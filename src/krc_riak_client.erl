@@ -23,12 +23,12 @@
 -module(krc_riak_client).
 
 %%%_* Behaviour ========================================================
--callback delete(_, _, _, _, _)    -> _.
--callback get(_, _, _, _, _)       -> _.
+-callback delete(_, _, _, _, _) -> _.
+-callback get(_, _, _, _, _) -> _.
 -callback get_index(_, _, _, _, _) -> _.
--callback ping(_, timeout())       -> ok | {error, _}.
--callback put(_, _, _, _)          -> _.
--callback start_link(_, _, _)      -> _.
+-callback ping(_, timeout()) -> ok | {error, _}.
+-callback put(_, _, _, _) -> _.
+-callback start_link(_, _, _) -> _.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
