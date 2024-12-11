@@ -24,29 +24,28 @@
 -behaviour(application).
 
 %%%_* Exports ==========================================================
--export([
-    start/2,
-    stop/1
-]).
+-export([ start/2
+        , stop/1
+        ]).
 
 %%%_* Includes =========================================================
 -include_lib("stdlib2/include/prelude.hrl").
 
 %%%_* Code =============================================================
 start(normal, Args) -> krc_sup:start_link(Args).
-stop(_) -> ok.
+stop(_)             -> ok.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
 basic_test() ->
-    ok = application:start(krc),
-    s2_procs:spinlock(?thunk(lists:member(krc_server, registered()))),
-    [{B, K, _, _, _}] = krc_test:gen_inputs(1),
-    {error, notfound} = krc:get(krc_server, B, K),
-    ok = application:stop(krc),
-    s2_procs:spinlock(?thunk(not lists:member(krc_server, registered()))).
+  ok = application:start(krc),
+  s2_procs:spinlock(?thunk(lists:member(krc_server, registered()))),
+  [{B, K, _, _, _}] = krc_test:gen_inputs(1),
+  {error, notfound} = krc:get(krc_server, B, K),
+  ok = application:stop(krc),
+  s2_procs:spinlock(?thunk(not lists:member(krc_server, registered()))).
 
 -endif.
 

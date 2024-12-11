@@ -5,4 +5,4 @@
 
 resolve(V1, ?TOMBSTONE) -> {ok, V1};
 resolve(?TOMBSTONE, V2) -> {ok, V2};
-resolve(_, _) -> {error, no_tombstone}.
+resolve(_, _)           -> {error, no_tombstone}.
