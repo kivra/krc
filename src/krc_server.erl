@@ -70,46 +70,42 @@
 
 %%%_* Exports ==========================================================
 %% krc_server API
--export([
-    start/1,
-    start/2,
-    start_link/1,
-    start_link/2,
-    stop/1
-]).
+-export([ start/1
+        , start/2
+        , start_link/1
+        , start_link/2
+        , stop/1
+        ]).
 
 %% Riak API
--export([
-    delete/2,
-    delete/3,
-    get/3,
-    get_bucket/2,
-    get_index/4,
-    get_index/5,
-    get_index/6,
-    list_keys/2,
-    ping/2,
-    put/2,
-    put/3,
-    set_bucket/3
-]).
+-export([ delete/2
+        , delete/3
+        , get/3
+        , get_bucket/2
+        , get_index/4
+        , get_index/5
+        , get_index/6
+        , list_keys/2
+        , ping/2
+        , put/2
+        , put/3
+        , set_bucket/3
+        ]).
 
 %% gen_server callbacks
--export([
-    code_change/3,
-    handle_call/3,
-    handle_cast/2,
-    handle_info/2,
-    init/1,
-    terminate/2
-]).
+-export([ code_change/3
+        , handle_call/3
+        , handle_cast/2
+        , handle_info/2
+        , init/1
+        , terminate/2
+        ]).
 
 %% Internal exports
--export([
-    connection/3,
-    opts/1,
-    wopts/0
-]).
+-export([ connection/3
+        , opts/1
+        , wopts/0
+        ]).
 
 %%%_* Includes =========================================================
 -include("krc.hrl").
@@ -117,269 +113,225 @@
 
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
-
-%gen_server:call/3
--define(TIMEOUT, 120000).
--define(QUEUE_TIMEOUT, 60000).
+-define(TIMEOUT,         120000). %gen_server:call/3
+-define(QUEUE_TIMEOUT,   60000).
 -define(MAX_DISCONNECTS, 3).
-%max number of worker failures to tolerate
--define(FAILURES, 100).
+-define(FAILURES,        100). %max number of worker failures to tolerate
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -record(s,
-    %krc_riak_client
-    {
-        client :: atom(),
-        %\ Riak
-        ip :: inet:ip_address(),
-        %/ server
-        port :: inet:port_number(),
-        %Connections
-        pids :: [pid()],
-        %Connection crash counter
-        failures = 0 :: non_neg_integer(),
-        free :: [pid()],
-        busy = [] :: [{pid(), term()}],
-        queue = queue:new()
-    }
-).
+        { client     :: atom()             %krc_riak_client
+        , ip         :: inet:ip_address()  %\ Riak
+        , port       :: inet:port_number() %/ server
+        , pids       :: [pid()]            %Connections
+        , failures=0 :: non_neg_integer()  %Connection crash counter
+        , free       :: [pid()]
+        , busy=[]    :: [{pid(), term()}]
+        , queue=queue:new()
+        }).
 
--record(req, {
-    from,
-    ts = throw('stamp'),
-    req = throw('req'),
-    disconnects = 0
-}).
+-record(req,
+        { from
+        , ts          = throw('stamp')
+        , req         = throw('req')
+        , disconnects = 0
+        }).
 
 %%%_ * API -------------------------------------------------------------
-delete(GS, O) -> call(GS, {delete, [O]}).
-delete(GS, B, K) -> call(GS, {delete, [B, K]}).
-get(GS, B, K) -> call(GS, {get, [B, K]}).
-get_bucket(GS, B) -> call(GS, {get_bucket, [B]}).
-get_index(GS, B, I, K) -> call(GS, {get_index, [B, I, K]}).
-get_index(GS, B, I, K, T) when
-    is_integer(T)
-->
-    call(GS, {get_index, [B, I, K], T}, T);
-get_index(GS, B, I, L, U) ->
-    call(GS, {get_index, [B, I, L, U]}).
-get_index(GS, B, I, L, U, T) -> call(GS, {get_index, [B, I, L, U], T}, T).
-list_keys(GS, B) -> call(GS, {list_keys, [B]}).
-ping(GS, T) -> call(GS, {ping, [], T}, T).
-put(GS, O) -> call(GS, {put, [O]}).
-put(GS, O, Opts) -> call(GS, {putwo, [O, Opts]}).
-set_bucket(GS, B, P) -> call(GS, {set_bucket, [B, P]}).
+delete(GS, O)                 -> call(GS, {delete,     [O]      }).
+delete(GS, B, K)              -> call(GS, {delete,     [B, K]   }).
+get(GS, B, K)                 -> call(GS, {get,        [B, K]   }).
+get_bucket(GS, B)             -> call(GS, {get_bucket, [B]      }).
+get_index(GS, B, I, K)        -> call(GS, {get_index,  [B, I, K]}).
+get_index(GS, B, I, K, T)
+           when is_integer(T) -> call(GS, {get_index,  [B, I, K], T}, T);
+get_index(GS, B, I, L, U)     -> call(GS, {get_index,  [B, I, L, U]}).
+get_index(GS, B, I, L, U, T)  -> call(GS, {get_index,  [B, I, L, U], T}, T).
+list_keys(GS, B)              -> call(GS, {list_keys,  [B]}).
+ping(GS, T)                   -> call(GS, {ping,       [], T}, T).
+put(GS, O)                    -> call(GS, {put,        [O]      }).
+put(GS, O, Opts)              -> call(GS, {putwo,      [O, Opts]}).
+set_bucket(GS, B, P)          -> call(GS, {set_bucket, [B, P]}).
 
-start(A) -> gen_server:start(?MODULE, A, []).
-start(Name, A) -> gen_server:start({local, Name}, ?MODULE, A, []).
-start_link(A) -> gen_server:start_link(?MODULE, A, []).
+start(A)            -> gen_server:start(?MODULE, A, []).
+start(Name, A)      -> gen_server:start({local, Name}, ?MODULE, A, []).
+start_link(A)       -> gen_server:start_link(?MODULE, A, []).
 start_link(Name, A) -> gen_server:start_link({local, Name}, ?MODULE, A, []).
-stop(GS) -> gen_server:call(GS, stop).
+stop(GS)            -> gen_server:call(GS, stop).
 
-call(GS, Req) -> call(GS, Req, ?TIMEOUT).
-call(GS, Req, T) ->
-    gen_server:call(
-        GS, #req{ts = s2_time:stamp(), req = Req}, T
-    ).
+call(GS, Req)       -> call(GS, Req, ?TIMEOUT).
+call(GS, Req, T)    -> gen_server:call(
+                         GS, #req{ts=s2_time:stamp(),req=Req}, T).
 
 %%%_ * gen_server callbacks --------------------------------------------
 init(Args) ->
-    process_flag(trap_exit, true),
-    Client = s2_env:get_arg(Args, ?APP, client, krc_pb_client),
-    IP = s2_env:get_arg(Args, ?APP, riak_ip, "127.0.0.1"),
-    Port = s2_env:get_arg(Args, ?APP, riak_port, 8081),
-    PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
-    Pids = [
-        connection_start(Client, IP, Port, self())
-     || _ <- lists:seq(1, PoolSize)
-    ],
-    {ok, #s{client = Client, ip = IP, port = Port, pids = Pids, free = Pids}}.
+  process_flag(trap_exit, true),
+  Client   = s2_env:get_arg(Args, ?APP, client,    krc_pb_client),
+  IP       = s2_env:get_arg(Args, ?APP, riak_ip,   "127.0.0.1"),
+  Port     = s2_env:get_arg(Args, ?APP, riak_port, 8081),
+  PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
+  Pids     = [connection_start(Client, IP, Port, self()) ||
+               _ <- lists:seq(1, PoolSize)],
+  {ok, #s{client=Client, ip=IP, port=Port, pids=Pids, free=Pids}}.
 
 terminate(_, #s{}) -> ok.
 
 code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
-    %workers linked
-    {stop, stopped, ok, S};
-handle_call(Req, From, #s{free = []} = S) ->
-    {noreply, S#s{queue = queue:in(Req#req{from = From}, S#s.queue)}};
-handle_call(Req0, From, #s{free = [Pid | Pids]} = S) ->
-    ?hence(queue:is_empty(S#s.queue)),
-    Req = Req0#req{from = From},
-    Pid ! {handle, Req},
-    {noreply, S#s{free = Pids, busy = [{Pid, Req} | S#s.busy]}}.
+  {stop, stopped, ok, S}; %workers linked
+handle_call(Req, From, #s{free=[]} = S) ->
+  {noreply, S#s{queue=queue:in(Req#req{from=From}, S#s.queue)}};
+handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
+  ?hence(queue:is_empty(S#s.queue)),
+  Req = Req0#req{from=From},
+  Pid ! {handle, Req},
+  {noreply, S#s{free=Pids, busy=[{Pid,Req}|S#s.busy]}}.
 
 handle_cast(_Msg, S) -> {stop, bad_cast, S}.
 
-handle_info({'EXIT', Pid, disconnected}, #s{pids = Pids} = S) ->
-    ?hence(lists:member(Pid, Pids)),
+handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
+  ?hence(lists:member(Pid, Pids)),
+  case lists:keytake(Pid, 1, S#s.busy) of
+    {value, {Pid, #req{disconnects=N}=Req}, Busy}
+      when N+1 > ?MAX_DISCONNECTS ->
+      ?critical("Krc EXIT disconnected: ~p", [Pid]),
+      gen_server:reply(Req#req.from, {error, disconnected}),
+      {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
+    {value, {Pid, #req{disconnects=N}=Req}, Busy} ->
+      NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
+      NewPid ! {handle, Req},
+      {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
+                   , busy = [{NewPid,Req#req{disconnects=N+1}}|Busy]}};
+    false ->
+      %% TODO: Since we don't have a limit on how many times
+      %% a worker (without work) can reconnect we rely on
+      %% that Riak is sensible here and don't disconnect
+      %% us right away.
+      %% This should possibly be replaced with a counter that
+      %% can tell us how many disconnects we have had the last X
+      %% minutes.
+      NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
+      ?info("Reconnecting disconnected worker: ~p", [NewPid]),
+      {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
+                   , free = [NewPid|S#s.free] -- [Pid]}}
+  end;
+handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
+  %% We assume that the system is restarted occasionally anyway (for upgrades
+  %% and such), so we don't bother resetting the counter.
+  ?critical("Krc EXIT ~p: ~p: too many failures", [Pid, Rsn]),
+  telemetry_event(
+    [process, error],
+    #{pid => Pid, reason => Rsn, failure_count => N}
+   ),
+  {stop, failures, S};
+handle_info({'EXIT', Pid, Rsn},
+            #s{client=Client, ip=IP, port=Port, failures=N} = S) ->
+  ?hence(lists:member(Pid, S#s.pids)),
+  ?error("Krc EXIT ~p: ~p", [Pid, Rsn]),
+  telemetry_event(
+    [process, error],
+    #{pid => Pid, reason => Rsn, failure_count => N}
+   ),
+  Busy1 =
     case lists:keytake(Pid, 1, S#s.busy) of
-        {value, {Pid, #req{disconnects = N} = Req}, Busy} when
-            N + 1 > ?MAX_DISCONNECTS
-        ->
-            ?critical("Krc EXIT disconnected: ~p", [Pid]),
-            gen_server:reply(Req#req.from, {error, disconnected}),
-            {stop, disconnected, S#s{busy = Busy, pids = Pids -- [Pid]}};
-        {value, {Pid, #req{disconnects = N} = Req}, Busy} ->
-            NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
-            NewPid ! {handle, Req},
-            {noreply, S#s{
-                pids = [NewPid | Pids] -- [Pid],
-                busy = [{NewPid, Req#req{disconnects = N + 1}} | Busy]
-            }};
-        false ->
-            %% TODO: Since we don't have a limit on how many times
-            %% a worker (without work) can reconnect we rely on
-            %% that Riak is sensible here and don't disconnect
-            %% us right away.
-            %% This should possibly be replaced with a counter that
-            %% can tell us how many disconnects we have had the last X
-            %% minutes.
-            NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
-            ?info("Reconnecting disconnected worker: ~p", [NewPid]),
-            {noreply, S#s{
-                pids = [NewPid | Pids] -- [Pid],
-                free = [NewPid | S#s.free] -- [Pid]
-            }}
-    end;
-handle_info({'EXIT', Pid, Rsn}, #s{failures = N} = S) when N > ?FAILURES ->
-    %% We assume that the system is restarted occasionally anyway (for upgrades
-    %% and such), so we don't bother resetting the counter.
-    ?critical("Krc EXIT ~p: ~p: too many failures", [Pid, Rsn]),
-    telemetry_event(
-        [process, error],
-        #{pid => Pid, reason => Rsn, failure_count => N}
-    ),
-    {stop, failures, S};
-handle_info(
-    {'EXIT', Pid, Rsn},
-    #s{client = Client, ip = IP, port = Port, failures = N} = S
-) ->
-    ?hence(lists:member(Pid, S#s.pids)),
-    ?error("Krc EXIT ~p: ~p", [Pid, Rsn]),
-    telemetry_event(
-        [process, error],
-        #{pid => Pid, reason => Rsn, failure_count => N}
-    ),
-    Busy1 =
-        case lists:keytake(Pid, 1, S#s.busy) of
-            {value, {Pid, #req{from = From}}, Busy0} ->
-                gen_server:reply(From, {error, Rsn}),
-                Busy0;
-            false ->
-                S#s.busy
-        end,
-    NewPid = connection_start(Client, IP, Port, self()),
-    {Free, Busy, Queue} = next_task(
-        [NewPid | S#s.free] -- [Pid],
-        Busy1,
-        S#s.queue
-    ),
-    {noreply, S#s{
-        pids = [NewPid | S#s.pids] -- [Pid],
-        free = Free,
-        busy = Busy,
-        queue = Queue,
-        failures = N + 1
-    }};
+      {value, {Pid, #req{from=From}}, Busy0} ->
+        gen_server:reply(From, {error, Rsn}),
+        Busy0;
+      false ->
+        S#s.busy
+    end,
+  NewPid = connection_start(Client, IP, Port, self()),
+  {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
+                                  Busy1,
+                                  S#s.queue),
+  {noreply, S#s{ pids     = [NewPid|S#s.pids] -- [Pid]
+               , free     = Free
+               , busy     = Busy
+               , queue    = Queue
+               , failures = N+1
+               }};
 handle_info({free, Pid}, S) ->
-    ?hence(lists:member(Pid, S#s.pids)),
-    {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
-    {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
-    {noreply, S#s{
-        free = Free,
-        busy = Busy,
-        queue = Queue
-    }};
+  ?hence(lists:member(Pid, S#s.pids)),
+  {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
+  {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
+  {noreply, S#s{ free  = Free
+               , busy  = Busy
+               , queue = Queue}};
 handle_info(Msg, S) ->
-    ?warning("~p", [Msg]),
-    {noreply, S}.
+  ?warning("~p", [Msg]),
+  {noreply, S}.
 
 %%%_ * Internals -------------------------------------------------------
-next_task([Pid | Free] = Free0, Busy, Queue0) ->
-    case queue:out(Queue0) of
-        {{value, Req}, Queue} ->
-            Pid ! {handle, Req},
-            {Free, [{Pid, Req} | Busy], Queue};
-        {empty, Queue0} ->
-            {Free0, Busy, Queue0}
-    end.
+next_task([Pid|Free]=Free0, Busy, Queue0) ->
+  case queue:out(Queue0) of
+    {{value, Req}, Queue} ->
+      Pid ! {handle, Req},
+      {Free, [{Pid,Req}|Busy], Queue};
+    {empty, Queue0} ->
+      {Free0, Busy, Queue0}
+  end.
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
-    proc_lib:spawn_link(
-        ?thunk(
-            {ok, Pid} = Client:start_link(IP, Port, copts()),
-            connection(Client, Pid, Daddy)
-        )
-    ).
+  proc_lib:spawn_link(?thunk(
+    {ok, Pid} = Client:start_link(IP, Port, copts()),
+    connection(Client, Pid, Daddy))).
 
 connection(Client, Pid, Daddy) ->
-    Event = [request, stop],
-    Metadata = #{pid => Pid, client => Client, daddy => Daddy},
-    receive
-        {handle, #req{ts = TS, req = Req, from = {Caller, _} = From}} ->
-            case {s2_procs:is_up(Caller), time_left(TS) > 0} of
-                {true, true} ->
-                    case ?lift(do(Client, Pid, Req)) of
-                        {error, disconnected} = Err ->
-                            ?error("disconnected", []),
-                            telemetry_event(
-                                Event,
-                                maps:merge(Metadata, #{result => error, error => disconnected})
-                            ),
-                            gen_server:reply(From, Err),
-                            exit(disconnected);
-                        {error, timeout} = Err ->
-                            ?error("timeout", []),
-                            telemetry_event(
-                                Event, maps:merge(Metadata, #{result => error, error => timeout})
-                            ),
-                            gen_server:reply(From, Err);
-                        {error, notfound} = Err ->
-                            ?debug("notfound", []),
-                            telemetry_event(
-                                Event, maps:merge(Metadata, #{result => error, error => notfound})
-                            ),
-                            gen_server:reply(From, Err);
-                        {error, <<"modified">>} = Err ->
-                            ?debug("modified", []),
-                            telemetry_event(
-                                Event, maps:merge(Metadata, #{result => error, error => modified})
-                            ),
-                            gen_server:reply(From, Err);
-                        {error, Rsn} = Err ->
-                            ?error("error: ~p", [Rsn]),
-                            telemetry_event(
-                                Event, maps:merge(Metadata, #{result => error, error => Rsn})
-                            ),
-                            gen_server:reply(From, Err);
-                        {ok, ok} ->
-                            telemetry_event(Event, maps:put(result, ok, Metadata)),
-                            gen_server:reply(From, ok);
-                        {ok, _} = Ok ->
-                            telemetry_event(Event, maps:put(result, ok, Metadata)),
-                            gen_server:reply(From, Ok)
-                    end;
-                {false, _} ->
-                    ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
-                    telemetry_event(Event, maps:put(error, dropped, Metadata));
-                {_, false} ->
-                    ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
-                    telemetry_event(Event, maps:put(error, out_of_time, Metadata)),
-                    gen_server:reply(From, {error, timeout})
-            end,
-            Daddy ! {free, self()};
-        Msg ->
-            ?warning("~p", [Msg])
-    end,
-    ?MODULE:connection(Client, Pid, Daddy).
+  Event = [request, stop],
+  Metadata = #{pid => Pid, client => Client, daddy => Daddy},
+  receive
+    {handle, #req{ts=TS, req=Req, from={Caller, _}=From}} ->
+      case {s2_procs:is_up(Caller), time_left(TS)>0} of
+        {true, true} ->
+          case ?lift(do(Client, Pid, Req)) of
+            {error, disconnected} = Err ->
+              ?error("disconnected", []),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => disconnected})),
+              gen_server:reply(From, Err),
+              exit(disconnected);
+            {error, timeout} = Err ->
+              ?error("timeout", []),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => timeout})),
+              gen_server:reply(From, Err);
+            {error, notfound} = Err ->
+              ?debug("notfound", []),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => notfound})),
+              gen_server:reply(From, Err);
+            {error, <<"modified">>} = Err ->
+              ?debug("modified", []),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => modified})),
+              gen_server:reply(From, Err);
+            {error, Rsn} = Err ->
+              ?error("error: ~p", [Rsn]),
+              telemetry_event(Event,  maps:merge(Metadata, #{result => error, error => Rsn})),
+              gen_server:reply(From, Err);
+            {ok, ok} ->
+              telemetry_event(Event, maps:put(result, ok, Metadata)),
+              gen_server:reply(From, ok);
+            {ok, _} = Ok ->
+              telemetry_event(Event, maps:put(result, ok, Metadata)),
+              gen_server:reply(From, Ok)
+          end;
+        {false, _} ->
+          ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
+          telemetry_event(Event, maps:put(error, dropped, Metadata));
+        {_, false} ->
+          ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
+          telemetry_event(Event, maps:put(error, out_of_time, Metadata)),
+          gen_server:reply(From, {error, timeout})
+      end,
+      Daddy ! {free, self()};
+    Msg ->
+      ?warning("~p", [Msg])
+  end,
+  ?MODULE:connection(Client, Pid, Daddy).
 
 time_left(T0) ->
-    T1 = s2_time:stamp(),
-    ElapsedMs = (T1 - T0) / 1000,
-    lists:max([?QUEUE_TIMEOUT - ElapsedMs, 0]).
+  T1        = s2_time:stamp(),
+  ElapsedMs = (T1 - T0) / 1000,
+  lists:max([?QUEUE_TIMEOUT - ElapsedMs, 0]).
 
 -spec do(atom(), pid(), {atom(), [_]}) -> 'maybe'(_, _).
 do(Client, Pid, {F, A}) ->
@@ -388,19 +340,19 @@ do(Client, Pid, {F, A, T}) ->
     do(Client, Pid, {F, A}, T).
 
 do(Client, Pid, {F, A}, T) ->
-    Args = [Pid] ++ A ++ opts(F) ++ [T],
-    ?debug("apply(~p, ~p, ~p)", [Client, F, Args]),
-    apply(Client, F, Args).
+  Args = [Pid] ++ A ++ opts(F) ++ [T],
+  ?debug("apply(~p, ~p, ~p)", [Client, F, Args]),
+  apply(Client, F, Args).
 
-opts(delete) -> [dopts()];
-opts(get) -> [ropts()];
-opts(get_bucket) -> [];
+opts(delete)    -> [dopts()];
+opts(get)       -> [ropts()];
+opts(get_bucket)-> [];
 opts(get_index) -> [];
 opts(list_keys) -> [];
-opts(ping) -> [];
-opts(put) -> [wopts()];
-opts(putwo) -> [];
-opts(set_bucket) -> [].
+opts(ping)      -> [];
+opts(put)       -> [wopts()];
+opts(putwo)     -> [];
+opts(set_bucket)-> [].
 
 %%%_  * Config ---------------------------------------------------------
 %% Our app.config sets:
@@ -410,84 +362,68 @@ opts(set_bucket) -> [].
 
 %% Connections
 copts() ->
-    %exit on TCP/IP error
-    [{auto_reconnect, false}] ++ sopts().
+  [ {auto_reconnect,  false}         %exit on TCP/IP error
+  ] ++ sopts().
 
 %% Security options
 sopts() ->
-    RiakUser = application:get_env(?APP, riak_user, undefined),
-    RiakPass = application:get_env(?APP, riak_pass, ""),
-    CACert = application:get_env(?APP, riak_cacertfile, undefined),
-    SSLOpts = application:get_env(?APP, riak_ssl_opts, []),
+  RiakUser = application:get_env(?APP, riak_user, undefined),
+  RiakPass = application:get_env(?APP, riak_pass, ""),
+  CACert = application:get_env(?APP, riak_cacertfile, undefined),
+  SSLOpts = application:get_env(?APP, riak_ssl_opts, []),
 
-    %% Only used when using certificate-based authentication
-    RiakCertFile = application:get_env(?APP, riak_certfile, undefined),
-    RiakKeyFile = application:get_env(?APP, riak_keyfile, undefined),
+  %% Only used when using certificate-based authentication
+  RiakCertFile = application:get_env(?APP, riak_certfile, undefined),
+  RiakKeyFile = application:get_env(?APP, riak_keyfile, undefined),
 
-    RiakCerts =
-        case RiakCertFile =/= undefined andalso RiakKeyFile =/= undefined of
-            true -> [{certfile, RiakCertFile}, {keyfile, RiakKeyFile}];
-            false -> []
-        end,
+  RiakCerts =
+    case RiakCertFile =/= undefined andalso RiakKeyFile =/= undefined of
+      true -> [{certfile, RiakCertFile}, {keyfile, RiakKeyFile}];
+      false -> []
+    end,
 
-    %% These two options are the minimum required ones for security to work
-    case RiakUser =/= undefined andalso CACert =/= undefined of
-        true ->
-            [
-                {credentials, RiakUser, RiakPass},
-                {cacertfile, CACert},
-                {ssl_opts, SSLOpts}
-                | RiakCerts
-            ];
-        false ->
-            []
-    end.
+  %% These two options are the minimum required ones for security to work
+  case RiakUser =/= undefined andalso CACert =/= undefined of
+    true ->
+      [ {credentials, RiakUser, RiakPass}
+      , {cacertfile, CACert}
+      , {ssl_opts, SSLOpts}
+      | RiakCerts ];
+    false ->
+      []
+  end.
 
 %% Reads
 ropts() ->
-    %\ Majority
-    [
-        {r, quorum},
-        %/ reads
-        {pr, 1},
-        {basic_quorum, false},
-        {notfound_ok, true}
-    ].
+  [ {r,               quorum}        %\ Majority
+  , {pr,              1}             %/ reads
+  , {basic_quorum,    false}
+  , {notfound_ok,     true}
+  ].
 
 %% Writes
 wopts() ->
-    %\  Majority
-    [
-        {w, quorum},
-        % } disk
-        {pw, 1},
-        %/  writes
-        {dw, quorum}
-    ].
+  [ {w,               quorum}        %\  Majority
+  , {pw,              1}             % } disk
+  , {dw,              quorum}        %/  writes
+  ].
 
 %% Deletes
 dopts() ->
-    %\
-    [
-        {r, quorum},
-        % \
-        {pr, 1},
-        %  \ Majority
-        {rw, quorum},
-        %  / deletes
-        {w, quorum},
-        % /
-        {pw, 1},
-        %/
-        {dw, quorum}
-    ].
+  [ {r,               quorum}        %\
+  , {pr,              1}             % \
+  , {rw,              quorum}        %  \ Majority
+  , {w,               quorum}        %  / deletes
+  , {pw,              1}             % /
+  , {dw,              quorum}        %/
+  ].
 
 telemetry_event(Event, Data) ->
-    telemetry:execute(
-        [?MODULE | Event],
-        #{monotonic_time => erlang:monotonic_time(), system_time => erlang:system_time()},
-        Data
-    ).
+  telemetry:execute(
+    [?MODULE | Event],
+    #{monotonic_time => erlang:monotonic_time(), system_time => erlang:system_time()},
+    Data
+   ).
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
@@ -495,123 +431,86 @@ telemetry_event(Event, Data) ->
 
 %% Test cases.
 basic_test() ->
-    krc_test:with_mock(
-        ?thunk(
-            krc_test:spawn_sync(
-                1000,
-                ?thunk(
-                    Obj = put_req(),
-                    {ok, Obj} = get_req()
-                )
-            )
-        )
-    ).
+  krc_test:with_mock(?thunk(
+    krc_test:spawn_sync(1000, ?thunk(
+      Obj       = put_req(),
+      {ok, Obj} = get_req())))).
 
 client_down_test() ->
-    krc_test:with_mock(
-        [{pool_size, 1}],
-        ?thunk(
-            krc_mock_client:lag(10),
-            %Fill queue
-            Pids = krc_test:spawn_async(10, ?thunk(put_req())),
-            [P] = krc_test:spawn_async(?thunk(timer:sleep(10), put_req())),
-            timer:sleep(20),
-            %\ Request
-            s2_procs:kill(P, [unlink]),
-            %/ dropped
-            krc_test:sync(Pids)
-        )
-    ).
+  krc_test:with_mock([{pool_size, 1}], ?thunk(
+    krc_mock_client:lag(10),
+    Pids = krc_test:spawn_async(10, ?thunk(put_req())), %Fill queue
+    [P]  = krc_test:spawn_async(?thunk(timer:sleep(10), put_req())),
+    timer:sleep(20),
+    s2_procs:kill(P, [unlink]), %\ Request
+    krc_test:sync(Pids))).      %/ dropped
+
 
 out_of_time_test_() ->
-    {timeout, 120,
-        ?thunk(
-            krc_test:with_mock(
-                [{pool_size, 1}],
-                ?thunk(
-                    krc_mock_client:lag(?QUEUE_TIMEOUT - 1000),
-                    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
-                    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
-                    krc_test:spawn_sync(?thunk({error, timeout} = get_req()))
-                )
-            )
-        )}.
+  {timeout, 120,
+   ?thunk(
+      krc_test:with_mock([{pool_size, 1}], ?thunk(
+      krc_mock_client:lag(?QUEUE_TIMEOUT - 1000),
+      krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+      krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+      krc_test:spawn_sync(?thunk({error, timeout} = get_req()))))
+     )}.
 
 timeout_test_() ->
-    {timeout, 120,
-        ?thunk(
-            krc_test:with_mock(
-                ?thunk(
-                    krc_mock_client:lag(?CALL_TIMEOUT + 1000),
-                    krc_test:spawn_sync(?thunk({error, timeout} = get_req()))
-                )
-            )
-        )}.
+  {timeout, 120,
+   ?thunk(
+      krc_test:with_mock(?thunk(
+      krc_mock_client:lag(?CALL_TIMEOUT + 1000),
+      krc_test:spawn_sync(?thunk({error, timeout} = get_req()))))
+     )}.
 
 failures_test() ->
-    ?MODULE:start([{riak_port, 6666}]).
+  ?MODULE:start([{riak_port, 6666}]).
 
 worker_crash_test() ->
-    krc_test:with_mock(
-        [{pool_size, 1}],
-        ?thunk(
-            krc_mock_client:lag(500),
-            krc_test:spawn_sync(?thunk({error, notfound} = get_req())),
-            {links, [Pid]} = erlang:process_info(whereis(krc_server), links),
-            exit(Pid, die),
-            %make sure request is routed to new worker
-            timer:sleep(100),
-            krc_test:spawn_async(?thunk({error, notfound} = get_req())),
-            krc_test:spawn_sync(?thunk({error, notfound} = get_req()))
-        )
-    ).
+  krc_test:with_mock([{pool_size, 1}], ?thunk(
+    krc_mock_client:lag(500),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req())),
+    {links, [Pid]} = erlang:process_info(whereis(krc_server), links),
+    exit(Pid, die),
+    timer:sleep(100), %make sure request is routed to new worker
+    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req())))).
 
 disconnected_request_test() ->
-    krc_test:with_mock(
-        ?thunk(
-            krc_mock_client:disconnect(),
-            krc_test:spawn_sync(?thunk({error, disconnected} = get_req())),
-            %wait for 'EXIT' message
-            timer:sleep(100)
-        )
-    ).
+  krc_test:with_mock(?thunk(
+    krc_mock_client:disconnect(),
+    krc_test:spawn_sync(?thunk({error, disconnected} = get_req())),
+    timer:sleep(100))). %wait for 'EXIT' message
 
 disconnected_test() ->
-    krc_test:with_mock(
-        [{pool_size, 2}],
-        ?thunk(
-            {links, [Pid1, Pid2]} = erlang:process_info(whereis(krc_server), links),
-            exit(Pid1, disconnected),
-            exit(Pid2, disconnected),
-            krc_test:spawn_sync(?thunk({error, notfound} = get_req()))
-        )
-    ).
+  krc_test:with_mock([{pool_size, 2}], ?thunk(
+    {links, [Pid1,Pid2]} = erlang:process_info(whereis(krc_server), links),
+    exit(Pid1, disconnected),
+    exit(Pid2, disconnected),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req()))
+    )).
+
 
 get_index_delete_test() ->
-    krc_test:with_mock(
-        ?thunk(
-            {ok, []} = ?MODULE:get_index(?MODULE, mah_bucket, mah_index, 42),
-            ok = ?MODULE:delete(?MODULE, mah_bucket, mah_key)
-        )
-    ).
+  krc_test:with_mock(?thunk(
+    {ok, []} = ?MODULE:get_index(?MODULE, mah_bucket, mah_index, 42),
+    ok       = ?MODULE:delete(?MODULE, mah_bucket, mah_key))).
 
 coverage_test() ->
-    krc_test:with_mock(
-        ?thunk(
-            process_flag(trap_exit, true),
-            {ok, Pid} = start_link([{client, krc_mock_client}]),
-            {ok, _} = start_link(mah_krc, [{client, krc_mock_client}]),
-            Pid ! foo,
-            gen_server:cast(mah_krc, foo),
-            {ok, bar} = code_change(foo, bar, baz)
-        )
-    ).
+  krc_test:with_mock(?thunk(
+     process_flag(trap_exit, true),
+     {ok, Pid} = start_link([{client, krc_mock_client}]),
+     {ok, _}   = start_link(mah_krc, [{client, krc_mock_client}]),
+     Pid ! foo,
+     gen_server:cast(mah_krc, foo),
+     {ok, bar} = code_change(foo,bar,baz))).
 
 %% Requests.
 put_req() ->
-    Obj = krc_obj:new(mah_bucket, self(), 42),
-    ok = ?MODULE:put(?MODULE, Obj),
-    Obj.
+  Obj = krc_obj:new(mah_bucket, self(), 42),
+  ok  = ?MODULE:put(?MODULE, Obj),
+  Obj.
 
 get_req() -> ?MODULE:get(?MODULE, mah_bucket, self()).
 

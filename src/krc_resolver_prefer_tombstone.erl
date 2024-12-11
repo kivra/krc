@@ -5,4 +5,4 @@
 
 resolve(_, ?TOMBSTONE) -> {ok, ?TOMBSTONE};
 resolve(?TOMBSTONE, _) -> {ok, ?TOMBSTONE};
-resolve(_, _) -> {error, no_tombstone}.
+resolve(_, _)          -> {error, no_tombstone}.

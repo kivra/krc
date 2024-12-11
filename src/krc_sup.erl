@@ -31,15 +31,9 @@
 start_link(Args) -> supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
 
 init(Args) ->
-    {ok,
-        s2_strats:worker_supervisor_strat(
-            [
-                s2_strats:permanent_worker_spec(
-                    krc_server,
-                    [krc_server, Args]
-                )
-            ]
-        )}.
+  {ok, s2_strats:worker_supervisor_strat(
+         [s2_strats:permanent_worker_spec(krc_server,
+                                          [krc_server, Args])])}.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).

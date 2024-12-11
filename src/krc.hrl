@@ -22,7 +22,7 @@
 -define(APP, krc).
 
 %% Default call timeout to krc
--define(CALL_TIMEOUT, 60000).
+-define(CALL_TIMEOUT,  60000).
 
 %%%_* Emacs ============================================================
 %%% Local Variables:
