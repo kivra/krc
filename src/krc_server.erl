@@ -367,6 +367,7 @@ copts() ->
 
 %% Security options
 sopts() ->
+  RiakSecurityEnabled = application:get_env(?APP, riak_security_enabled, false),
   RiakUser = application:get_env(?APP, riak_user, undefined),
   RiakPass = application:get_env(?APP, riak_pass, ""),
   CACert = application:get_env(?APP, riak_cacertfile, undefined),
@@ -382,8 +383,8 @@ sopts() ->
       false -> []
     end,
 
-  %% These two options are the minimum required ones for security to work
-  case RiakUser =/= undefined andalso CACert =/= undefined of
+  %% User and CA certificate are the minimum required opts for security to work
+  case RiakSecurityEnabled andalso RiakUser =/= undefined andalso CACert =/= undefined of
     true ->
       [ {credentials, RiakUser, RiakPass}
       , {cacertfile, CACert}
