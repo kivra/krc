@@ -11,7 +11,7 @@
   1},
  {<<"riakc">>,
   {git,"git@github.com:kivra/riak-erlang-client.git",
-       {ref,"8313902e4aaef7a160312ffe4bf812b6eb99de03"}},
+       {ref,"9773e1582bb7af16d1b4e45a946d40cc42bf38bd"}},
   0},
  {<<"stdlib2">>,
   {git,"git@github.com:kivra/stdlib2.git",
