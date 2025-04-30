@@ -36,6 +36,7 @@
         , putwo/4
         , set_bucket/4
         , start_link/3
+        , stop/1
         ]).
 
 %%%_* Includes =========================================================
@@ -48,6 +49,9 @@ start_link(IP, Port, Options) ->
   {ok, Pid} = riakc_pb_socket:start_link(IP, Port, Options),
   pong      = riakc_pb_socket:ping(Pid), %ensure server actually reachable
   {ok, Pid}.
+
+stop(Pid) ->
+  riakc_pb_socket:stop(Pid).
 
 delete(Pid, Obj, Options, Timeout) ->
   obj_exec(Pid, delete_obj, Obj, Options, Timeout).
