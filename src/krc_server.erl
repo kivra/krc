@@ -131,11 +131,11 @@
         , busy=[]    :: [{pid(), term()}]
         , queue=queue:new()
         %% Determines how often a connection should be recreated
-        %% If set to 'undefined', connections are not recreated
+        %% If set to '0', connections are permanent.
         %% The use case for this is when riak is behind an LB and
         %% connections need to be drained in a node, e.g. for
         %% maintenance.
-        , conn_ttl=undefined :: undefined | non_neg_integer()
+        , conn_ttl=0 ::  non_neg_integer()
         }).
 
 -record(req,
@@ -181,9 +181,10 @@ init(Args) ->
   IP       = s2_env:get_arg(Args, ?APP, riak_ip,   "127.0.0.1"),
   Port     = s2_env:get_arg(Args, ?APP, riak_port, 8087),
   PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
+  ConnTTL  = s2_env:get_arg(Args, ?APP, conn_ttl, 0),
   Pids     = [connection_start(Client, IP, Port, self()) ||
                _ <- lists:seq(1, PoolSize)],
-  {ok, #s{client=Client, ip=IP, port=Port, pids=init_pids(Pids), free=Pids}}.
+  {ok, #s{client=Client, ip=IP, port=Port, pids=init_pids(Pids), free=Pids, conn_ttl=ConnTTL}}.
 
 terminate(_, #s{}) -> ok.
 
