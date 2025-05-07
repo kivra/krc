@@ -255,7 +255,7 @@ basic_test() ->
 
 indices_test() ->
   KrcObj0      = new(foo, bar, baz),
-  I            = [{i1, k1}, {i2, k2}],
+  I            = [{<<"i1">>, <<"k1">>}, {<<"i2">>, <<"k2">>}],
   KrcObj       = set_indices(KrcObj0, I),
 
   RiakcObj     = to_riakc_obj(KrcObj),

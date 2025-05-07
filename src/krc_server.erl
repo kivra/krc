@@ -179,7 +179,7 @@ init(Args) ->
   process_flag(trap_exit, true),
   Client   = s2_env:get_arg(Args, ?APP, client,    krc_pb_client),
   IP       = s2_env:get_arg(Args, ?APP, riak_ip,   "127.0.0.1"),
-  Port     = s2_env:get_arg(Args, ?APP, riak_port, 8081),
+  Port     = s2_env:get_arg(Args, ?APP, riak_port, 8087),
   PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
   Pids     = [connection_start(Client, IP, Port, self()) ||
                _ <- lists:seq(1, PoolSize)],

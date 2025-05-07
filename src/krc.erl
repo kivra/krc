@@ -164,11 +164,15 @@ get_bucket(S, B) ->
 %% @doc Get all objects tagged with I in bucket B.
 get_index(S, B, I, K) ->
   get_index(S, B, I, K, krc_policy_default).
+
 get_index(S, B, I, K, Strat) ->
+    get_index(S, B, I, K, Strat, ?CALL_TIMEOUT).
+
+get_index(S, B, I, K, Strat, T) ->
   {ok, Keys} =
     case K of
       {match, X}    -> krc_server:get_index(S, B, I, X);
-      {range, X, Y} -> krc_server:get_index(S, B, I, X, Y)
+      {range, X, Y} -> krc_server:get_index(S, B, I, X, Y, T)
     end,
   s2_par:map(fun(Key) -> get(S, B, Key, Strat) end,
              Keys,
@@ -253,7 +257,7 @@ set_bucket(S, B, P) ->
 
 %%%_ * Internals -------------------------------------------------------
 %% @doc We automatically try to GET this many times.
-get_tries() -> s2_env:get_arg([], ?APP, get_tries, 3).
+get_tries() -> s2_env:get_arg([], ?APP, get_tries, 1).
 
 %% @doc We automatically try to PUT this many times.
 put_tries() -> s2_env:get_arg([], ?APP, put_tries, 1).
