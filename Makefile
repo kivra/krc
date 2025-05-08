@@ -1,9 +1,12 @@
 suite=$(if $(SUITE), suite=$(SUITE), )
 
-.PHONY:	all deps check test clean
+.PHONY:	all ci deps check test clean
 
 all: deps
 	rebar3 compile
+
+ci: clean xref dialyzer up test down
+.NOTPARALLEL: ci up test down
 
 deps:
 	rebar3 get-deps
