@@ -8,9 +8,6 @@ all: deps
 deps:
 	rebar3 get-deps
 
-docs:
-	rebar3 doc
-
 dialyzer:
 	rebar3 dialyzer
 
@@ -28,6 +25,5 @@ xref:
 
 clean:
 	rebar3 clean
-	$(RM) doc/*
 
 # eof
