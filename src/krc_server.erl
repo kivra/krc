@@ -397,7 +397,7 @@ sopts() ->
 %% Reads
 ropts() ->
   [ {r,               quorum}        %\ Majority
-  , {pr,              1}             %/ reads
+  , {pr,              2}             %/ reads
   , {basic_quorum,    false}
   , {notfound_ok,     true}
   ].
