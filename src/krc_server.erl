@@ -399,7 +399,7 @@ ropts() ->
   [ {r,               quorum}        %\ Majority
   , {pr,              1}             %/ reads
   , {basic_quorum,    false}
-  , {notfound_ok,     true}
+  , {notfound_ok,     false}      %% CHANGE BACK to true
   ].
 
 %% Writes
