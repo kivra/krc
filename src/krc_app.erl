@@ -40,7 +40,7 @@ stop(_)             -> ok.
 -include_lib("eunit/include/eunit.hrl").
 
 basic_test() ->
-  ok = application:start(krc),
+  {ok, _} = application:ensure_all_started(krc),
   s2_procs:spinlock(?thunk(lists:member(krc_server, registered()))),
   [{B, K, _, _, _}] = krc_test:gen_inputs(1),
   {error, notfound} = krc:get(krc_server, B, K),

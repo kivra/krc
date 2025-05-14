@@ -75,6 +75,7 @@
         , start_link/1
         , start_link/2
         , stop/1
+        , set_connection_ttl/2
         ]).
 
 %% Riak API
@@ -119,15 +120,22 @@
 -define(FAILURES,        100). %max number of worker failures to tolerate
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
+-type timestamp() :: integer().
 -record(s,
         { client     :: atom()             %krc_riak_client
         , ip         :: inet:ip_address()  %\ Riak
         , port       :: inet:port_number() %/ server
-        , pids       :: [pid()]            %Connections
+        , pids       :: #{pid() := timestamp()} %Connections
         , failures=0 :: non_neg_integer()  %Connection crash counter
         , free       :: [pid()]
         , busy=[]    :: [{pid(), term()}]
         , queue=queue:new()
+        %% Determines how often a connection should be recreated
+        %% If set to '0', connections are permanent.
+        %% The use case for this is when riak is behind an LB and
+        %% connections need to be drained in a node, e.g. for
+        %% maintenance.
+        , conn_ttl=0 ::  non_neg_integer()
         }).
 
 -record(req,
@@ -159,6 +167,9 @@ start_link(A)       -> gen_server:start_link(?MODULE, A, []).
 start_link(Name, A) -> gen_server:start_link({local, Name}, ?MODULE, A, []).
 stop(GS)            -> gen_server:call(GS, stop).
 
+set_connection_ttl(GS, TTL)
+  when is_integer(TTL) andalso TTL >= 0 -> gen_server:call(GS, {set_ttl, TTL}).
+
 call(GS, Req)       -> call(GS, Req, ?TIMEOUT).
 call(GS, Req, T)    -> gen_server:call(
                          GS, #req{ts=s2_time:stamp(),req=Req}, T).
@@ -168,11 +179,12 @@ init(Args) ->
   process_flag(trap_exit, true),
   Client   = s2_env:get_arg(Args, ?APP, client,    krc_pb_client),
   IP       = s2_env:get_arg(Args, ?APP, riak_ip,   "127.0.0.1"),
-  Port     = s2_env:get_arg(Args, ?APP, riak_port, 8081),
+  Port     = s2_env:get_arg(Args, ?APP, riak_port, 8087),
   PoolSize = s2_env:get_arg(Args, ?APP, pool_size, 5),
+  ConnTTL  = s2_env:get_arg(Args, ?APP, conn_ttl, 0),
   Pids     = [connection_start(Client, IP, Port, self()) ||
                _ <- lists:seq(1, PoolSize)],
-  {ok, #s{client=Client, ip=IP, port=Port, pids=Pids, free=Pids}}.
+  {ok, #s{client=Client, ip=IP, port=Port, pids=init_pids(Pids), free=Pids, conn_ttl=ConnTTL}}.
 
 terminate(_, #s{}) -> ok.
 
@@ -180,6 +192,8 @@ code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
+handle_call({set_ttl, TTL}, _From, S) ->
+  {reply, ok, S#s{conn_ttl=TTL}};
 handle_call(Req, From, #s{free=[]} = S) ->
   {noreply, S#s{queue=queue:in(Req#req{from=From}, S#s.queue)}};
 handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
@@ -191,17 +205,17 @@ handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
 handle_cast(_Msg, S) -> {stop, bad_cast, S}.
 
 handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
-  ?hence(lists:member(Pid, Pids)),
+  ?hence(lists:member(Pid, list_pids(Pids))),
   case lists:keytake(Pid, 1, S#s.busy) of
     {value, {Pid, #req{disconnects=N}=Req}, Busy}
       when N+1 > ?MAX_DISCONNECTS ->
       ?critical("Krc EXIT disconnected: ~p", [Pid]),
       gen_server:reply(Req#req.from, {error, disconnected}),
-      {stop, disconnected, S#s{busy=Busy, pids=Pids--[Pid]}};
+      {stop, disconnected, S#s{busy=Busy, pids=remove_pid(Pids, Pid)}};
     {value, {Pid, #req{disconnects=N}=Req}, Busy} ->
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
       NewPid ! {handle, Req},
-      {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
+      {noreply, S#s{ pids = replace_pid(Pids, Pid, NewPid)
                    , busy = [{NewPid,Req#req{disconnects=N+1}}|Busy]}};
     false ->
       %% TODO: Since we don't have a limit on how many times
@@ -213,7 +227,7 @@ handle_info({'EXIT', Pid, disconnected}, #s{pids=Pids} = S) ->
       %% minutes.
       NewPid = connection_start(S#s.client, S#s.ip, S#s.port, self()),
       ?info("Reconnecting disconnected worker: ~p", [NewPid]),
-      {noreply, S#s{ pids = [NewPid|Pids] -- [Pid]
+      {noreply, S#s{ pids = replace_pid(Pids, Pid, NewPid)
                    , free = [NewPid|S#s.free] -- [Pid]}}
   end;
 handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
@@ -225,9 +239,26 @@ handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
     #{pid => Pid, reason => Rsn, failure_count => N}
    ),
   {stop, failures, S};
+handle_info({'EXIT', Pid, {shutdown, expired}},
+            #s{client=Client, ip=IP, port=Port, pids=Pids} = S) ->
+  ?hence(lists:member(Pid, list_pids(Pids))),
+  ?debug("Krc EXIT ~p: expired connection", [Pid]),
+  telemetry_event([process, expired], #{pid => Pid}),
+
+  %% Renew the connection
+  NewPid = connection_start(Client, IP, Port, self()),
+  ?debug("Krc created new connection ~p", [Pid]),
+  {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
+                                  S#s.busy,
+                                  S#s.queue),
+  {noreply, S#s{ pids     = replace_pid(Pids, Pid, NewPid)
+               , free     = Free
+               , busy     = Busy
+               , queue    = Queue
+               }};
 handle_info({'EXIT', Pid, Rsn},
-            #s{client=Client, ip=IP, port=Port, failures=N} = S) ->
-  ?hence(lists:member(Pid, S#s.pids)),
+            #s{client=Client, ip=IP, port=Port, failures=N, pids=Pids} = S) ->
+  ?hence(lists:member(Pid, list_pids(Pids))),
   ?error("Krc EXIT ~p: ~p", [Pid, Rsn]),
   telemetry_event(
     [process, error],
@@ -245,19 +276,35 @@ handle_info({'EXIT', Pid, Rsn},
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
                                   Busy1,
                                   S#s.queue),
-  {noreply, S#s{ pids     = [NewPid|S#s.pids] -- [Pid]
+  {noreply, S#s{ pids     = replace_pid(Pids, Pid, NewPid)
                , free     = Free
                , busy     = Busy
                , queue    = Queue
                , failures = N+1
                }};
-handle_info({free, Pid}, S) ->
-  ?hence(lists:member(Pid, S#s.pids)),
+
+handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
+  ?hence(lists:member(Pid, list_pids(Pids))),
+  %% Take it out of the busy list no matter the next step
   {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
-  {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
-  {noreply, S#s{ free  = Free
-               , busy  = Busy
-               , queue = Queue}};
+
+  %% A connection should get expired if all conditions below are true
+  %% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
+  %% - The age of the connection is bigger than the configred TTL
+  ShouldExpireConn =
+    is_integer(ConnTTL) andalso ConnTTL > 0 andalso
+    conn_age(Pid, Pids) > ConnTTL,
+
+  case ShouldExpireConn of
+    true ->
+      Pid ! expire,
+      {noreply, S#s{busy = Busy0}};
+    false ->
+      {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
+      {noreply, S#s{ free  = Free
+                   , busy  = Busy
+                   , queue = Queue}}
+  end;
 handle_info(Msg, S) ->
   ?warning("~p", [Msg]),
   {noreply, S}.
@@ -271,6 +318,29 @@ next_task([Pid|Free]=Free0, Busy, Queue0) ->
     {empty, Queue0} ->
       {Free0, Busy, Queue0}
   end.
+
+
+%%%_  * pids data  ----------------------------------------------------
+init_pids(Pids) ->
+  Now = os:system_time(second),
+  lists:foldl(
+    fun(Pid, Map) -> maps:put(Pid, Now, Map) end,
+    #{},
+    Pids).
+
+list_pids(PidsMap) ->
+  maps:keys(PidsMap).
+
+replace_pid(PidsMap0, OldPid, NewPid) ->
+  PidsMap1 = maps:remove(OldPid, PidsMap0),
+  maps:put(NewPid, os:system_time(second), PidsMap1).
+
+remove_pid(PidsMap, Pid) ->
+  maps:remove(Pid, PidsMap).
+
+conn_age(Pid, PidsMap) ->
+  Now = os:system_time(second),
+  Now - maps:get(Pid, PidsMap).
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
@@ -323,6 +393,9 @@ connection(Client, Pid, Daddy) ->
           gen_server:reply(From, {error, timeout})
       end,
       Daddy ! {free, self()};
+    expire ->
+      Client:stop(Pid),
+      exit({shutdown, expired});
     Msg ->
       ?warning("~p", [Msg])
   end,

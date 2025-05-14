@@ -2,7 +2,7 @@ services:
   riak:
     image: basho/riak-kv:ubuntu-2.2.3
     ports:
-      - 8081:8081
+      - 8087:8087
     volumes:
       - ./riak/user.conf:/etc/riak/user.conf
     healthcheck:
