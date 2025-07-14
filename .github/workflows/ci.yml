@@ -5,6 +5,10 @@ on:
   # for feature branches
   pull_request:
 
+concurrency:
+  group: ${{ (github.ref != 'refs/heads/master') && format('{0}-{1}', github.ref, github.workflow) || github.run_id }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
 jobs:
   ci:
     name: ci
@@ -12,13 +16,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - uses: erlef/setup-beam@v1.18.2
+        with:
+          otp-version: 26
+          rebar3-version: 3.24
 
       - run: |
-          #if [[ "${HEAD_REF}" =~ renovate/.* ]]; then
+          if [[ "${HEAD_REF}" =~ renovate/.* ]]; then
             echo "ℹ️ This appears to come from a Renovate PR. Trying rebar.lock update..."
 
             CHANGED=false
             ORIGIN="origin/${{ github.event.repository.default_branch }}"
+
+            git config user.name "kivrabot"
+            git config user.email "kivrabot@users.noreply.github.com"
 
             if ! git diff --quiet --exit-code "${ORIGIN}"..HEAD -- rebar.config; then
               rebar3 upgrade --all
@@ -34,13 +48,8 @@ jobs:
               git commit -m "auto-update(deps): Changes in rebar.lock"
               git push origin HEAD:"${HEAD_REF}"
             fi
-          #fi
+          fi
         env:
           HEAD_REF: ${{ github.head_ref }}
-
-      - uses: erlef/setup-beam@v1.18.2
-        with:
-          otp-version: 26
-          rebar3-version: 3.24
 
       - run: make ci
