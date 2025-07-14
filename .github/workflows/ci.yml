@@ -4,6 +4,10 @@ name: ci
 on:
   # for feature branches
   pull_request:
+  # for rebar.lock updates
+  push:
+    branches:
+      - renovate/**
 
 concurrency:
   group: ${{ (github.ref != 'refs/heads/master') && format('{0}-{1}', github.ref, github.workflow) || github.run_id }}
