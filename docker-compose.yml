@@ -1,6 +1,6 @@
 services:
   riak:
-    image: basho/riak-kv:ubuntu-2.2.3
+    image: basho/riak-kv:ubuntu-2.2.3@sha256:4ea3b1178c4be2650086613a4ff4a6d702b52cf25415b233951ec0a32f3c4a8a
     ports:
       - 8087:8087
     volumes:
