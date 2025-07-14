@@ -13,6 +13,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
 
+      - run: |
+          #if [[ "${HEAD_REF}" =~ renovate/.* ]]; then
+            echo "ℹ️ This appears to come from a Renovate PR. Trying rebar.lock update..."
+
+            CHANGED=false
+            ORIGIN="origin/${{ github.event.repository.default_branch }}"
+
+            if ! git diff --quiet --exit-code "${ORIGIN}"..HEAD -- rebar.config; then
+              rebar3 upgrade --all
+
+              if ! git diff --quiet --exit-code rebar.lock; then
+                # there's stuff to push
+                git add rebar.lock
+                CHANGED=true
+              fi
+            fi
+
+            if [[ "${CHANGED}" == "true" ]]; then
+              git commit -m "auto-update(deps): Changes in rebar.lock"
+              git push origin HEAD:"${HEAD_REF}"
+            fi
+          #fi
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+
       - uses: erlef/setup-beam@v1.18.2
         with:
           otp-version: 26
