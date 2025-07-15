@@ -243,7 +243,7 @@ handle_info({'EXIT', Pid, {shutdown, expired}},
             #s{client=Client, ip=IP, port=Port, pids=Pids} = S) ->
   ?hence(lists:member(Pid, list_pids(Pids))),
   ?debug("Krc EXIT ~p: expired connection", [Pid]),
-  telemetry_event([process, expired], #{pid => Pid}),
+  telemetry_event([connection, expired], #{pid => Pid}),
 
   %% Renew the connection
   NewPid = connection_start(Client, IP, Port, self()),
@@ -346,6 +346,7 @@ conn_age(Pid, PidsMap) ->
 connection_start(Client, IP, Port, Daddy) ->
   proc_lib:spawn_link(?thunk(
     {ok, Pid} = Client:start_link(IP, Port, copts()),
+    telemetry_event([connection, start], #{pid => Pid}),
     connection(Client, Pid, Daddy))).
 
 connection(Client, Pid, Daddy) ->
@@ -395,6 +396,7 @@ connection(Client, Pid, Daddy) ->
       Daddy ! {free, self()};
     expire ->
       Client:stop(Pid),
+      telemetry_event([connection, stop], #{pid => Pid}),
       exit({shutdown, expired});
     Msg ->
       ?warning("~p", [Msg])
