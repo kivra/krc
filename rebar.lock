@@ -3,8 +3,8 @@
   {git,"https://github.com/basho/hamcrest-erlang.git",
        {ref,"ad3dbab419762fc2d5821abb88b989da006b85c6"}},
   2},
- {<<"prometheus">>,{pkg,<<"prometheus">>,<<"4.12.0">>},0},
- {<<"quantile_estimator">>,{pkg,<<"quantile_estimator">>,<<"1.0.1">>},1},
+ {<<"prometheus">>,{pkg,<<"prometheus">>,<<"5.1.1">>},0},
+ {<<"quantile_estimator">>,{pkg,<<"quantile_estimator">>,<<"1.0.2">>},1},
  {<<"riak_pb">>,
   {git,"https://github.com/basho/riak_pb",
        {ref,"08771aba2ce4935b715d32d1b92555efdc3da994"}},
@@ -20,11 +20,11 @@
  {<<"telemetry">>,{pkg,<<"telemetry">>,<<"1.3.0">>},0}]}.
 [
 {pkg_hash,[
- {<<"prometheus">>, <<"5CCA20A8935A8DFE21AE43AD133CE356DC45812D6464A46E991C5922E4119197">>},
- {<<"quantile_estimator">>, <<"6CED14FBACCF5BC4C9F79EB28468A1D2BABD4B53EC978AD458CBD17B556C6C22">>},
+ {<<"prometheus">>, <<"C84D8D3DD703B54B450FA1EDA1552AE70F9B72DB3C093A947E416257486925A7">>},
+ {<<"quantile_estimator">>, <<"ECD281D40110FDD9BA62685531E4435E0839A52FD1058DA5564F1763E4642EF7">>},
  {<<"telemetry">>, <<"FEDEBBAE410D715CF8E7062C96A1EF32EC22E764197F70CDA73D82778D61E7A2">>}]},
 {pkg_hash_ext,[
- {<<"prometheus">>, <<"352E6C32CEB0C2A2407CC5756ABF2AEAEC36D1E976AC7608423C8B61FAB5707D">>},
- {<<"quantile_estimator">>, <<"401C4ADACE179F1A709CD269207324535B00888C87F980B0F794F79DEB3767D8">>},
+ {<<"prometheus">>, <<"82F8F8613E8CBC3B4DD1D7724F9807B3175B37DCD4C6CB903BB27C6A07591FF0">>},
+ {<<"quantile_estimator">>, <<"DB404793D6384995A1AC6DD973E2CEE5BE9FCC128765BDBA53D87C564E296B64">>},
  {<<"telemetry">>, <<"7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6">>}]}
 ].
