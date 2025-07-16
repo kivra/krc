@@ -193,8 +193,8 @@ code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
-handle_call({set_ttl, TTL}, _From, S) ->
-  {reply, ok, S#s{conn_ttl=TTL}};
+handle_call({set_ttl, TTL}, _From, #s{conn_ttl=OldTTL, pids=Pids} = S) ->
+  {reply, ok, S#s{conn_ttl=TTL,pids=maybe_refresh_conn_timestamp(OldTTL, Pids)}};
 handle_call(Req, From, #s{free=[]} = S) ->
   {noreply, S#s{queue=queue:in(Req#req{from=From}, S#s.queue)}};
 handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
@@ -342,6 +342,12 @@ conn_age(Pid, PidsMap) ->
 should_expire_conn(ConnTTL, ConnAge) ->
   is_integer(ConnTTL) andalso ConnTTL > 0 andalso
     ConnAge > ConnTTL + rand:uniform(?MAX_CONN_TTL_ADJUST_SEC).
+
+%% Refresh the pids TTL if the TTL was previously disabled.
+maybe_refresh_conn_timestamp(OldTTL, Pids) when is_integer(OldTTL) andalso OldTTL > 0 ->
+  Pids;
+maybe_refresh_conn_timestamp(_OldTTL, Pids) ->
+  init_pids(maps:keys(Pids)).
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
