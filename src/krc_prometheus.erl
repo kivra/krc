@@ -20,6 +20,7 @@
 -export([declare_metrics/0]).
 -export([conflict_count/2]).
 -export([process_error_count/0]).
+-export([connection_count/1]).
 -export([retry_count/2]).
 -export([request_count/2]).
 -export([request_duration/4]).
@@ -51,6 +52,11 @@ declare_metrics() ->
     {name, krc_process_error_total},
     {labels, []},
     {help, "Client process error count"}
+  ]),
+  prometheus_counter:declare([
+    {name, krc_connection_total},
+    {labels, [state]},
+    {help, "Client connection count"}
   ]),
   prometheus_histogram:declare([
     {name, krc_request_duration_seconds},
@@ -90,6 +96,10 @@ request_count(Result, Error) ->
 -spec process_error_count() -> any().
 process_error_count() ->
     prometheus_counter:inc(krc_process_error_total, [], 1).
+
+-spec connection_count(start | stop | expired) -> any().
+connection_count(State) ->
+    prometheus_counter:inc(krc_connection_total, [State], 1).
 
 -spec request_duration(pos_integer(), atom(), binary(), binary()) -> any().
 request_duration(DurationNative, Result, Op, Bucket) ->
