@@ -1,5 +1,8 @@
 ---
 name: ci
+permissions:
+  contents: read
+  pull-requests: write
 
 on:
   # for feature branches
