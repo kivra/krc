@@ -339,9 +339,10 @@ conn_age(Pid, PidsMap) ->
 %% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
 %% - The age of the connection is bigger than the provided TTL plus a random
 %%   adjusted TTL.
-should_expire_conn(ConnTTL, ConnAge) ->
-  is_integer(ConnTTL) andalso ConnTTL > 0 andalso
-    ConnAge > ConnTTL + rand:uniform(?MAX_CONN_TTL_ADJUST_SEC).
+should_expire_conn(ConnTTL, ConnAge) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
+  ConnAge > ConnTTL + rand:uniform(?MAX_CONN_TTL_ADJUST_SEC);
+should_expire_conn(_ConnTTL, _ConnAge) ->
+  false.
 
 %% Refresh the pids TTL if the TTL was previously disabled.
 maybe_refresh_conn_timestamp(OldTTL, Pids) when is_integer(OldTTL) andalso OldTTL > 0 ->
