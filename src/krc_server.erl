@@ -118,7 +118,7 @@
 -define(QUEUE_TIMEOUT,           60000).
 -define(MAX_DISCONNECTS,         3).
 -define(FAILURES,                100). %max number of worker failures to tolerate
--define(MAX_CONN_TTL_ADJUST_SEC, 10).
+-define(MAX_CONN_TTL_ADJUST_SEC, 30).
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -type timestamp() :: integer().
