@@ -114,10 +114,11 @@
 
 %%%_* Macros ===========================================================
 %% Make sure we time out internally before our clients time out.
--define(TIMEOUT,         120000). %gen_server:call/3
--define(QUEUE_TIMEOUT,   60000).
--define(MAX_DISCONNECTS, 3).
--define(FAILURES,        100). %max number of worker failures to tolerate
+-define(TIMEOUT,                 120000). %gen_server:call/3
+-define(QUEUE_TIMEOUT,           60000).
+-define(MAX_DISCONNECTS,         3).
+-define(FAILURES,                100). %max number of worker failures to tolerate
+-define(MAX_CONN_TTL_ADJUST_SEC, 30).
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -type timestamp() :: integer().
@@ -192,8 +193,8 @@ code_change(_, S, _) -> {ok, S}.
 
 handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
-handle_call({set_ttl, TTL}, _From, S) ->
-  {reply, ok, S#s{conn_ttl=TTL}};
+handle_call({set_ttl, TTL}, _From, #s{conn_ttl=OldTTL, pids=Pids} = S) ->
+  {reply, ok, S#s{conn_ttl=TTL,pids=maybe_refresh_conn_timestamp(OldTTL, Pids)}};
 handle_call(Req, From, #s{free=[]} = S) ->
   {noreply, S#s{queue=queue:in(Req#req{from=From}, S#s.queue)}};
 handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
@@ -288,14 +289,7 @@ handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
   %% Take it out of the busy list no matter the next step
   {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
 
-  %% A connection should get expired if all conditions below are true
-  %% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
-  %% - The age of the connection is bigger than the configred TTL
-  ShouldExpireConn =
-    is_integer(ConnTTL) andalso ConnTTL > 0 andalso
-    conn_age(Pid, Pids) > ConnTTL,
-
-  case ShouldExpireConn of
+  case should_expire_conn(ConnTTL, conn_age(Pid, Pids)) of
     true ->
       Pid ! expire,
       {noreply, S#s{busy = Busy0}};
@@ -319,7 +313,6 @@ next_task([Pid|Free]=Free0, Busy, Queue0) ->
       {Free0, Busy, Queue0}
   end.
 
-
 %%%_  * pids data  ----------------------------------------------------
 init_pids(Pids) ->
   Now = os:system_time(second),
@@ -341,6 +334,21 @@ remove_pid(PidsMap, Pid) ->
 conn_age(Pid, PidsMap) ->
   Now = os:system_time(second),
   Now - maps:get(Pid, PidsMap).
+
+%% A connection should get expired if all conditions below are true
+%% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
+%% - The age of the connection is bigger than the provided TTL plus a random
+%%   adjusted TTL.
+should_expire_conn(ConnTTL, ConnAge) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
+  ConnAge > ConnTTL + rand:uniform(?MAX_CONN_TTL_ADJUST_SEC);
+should_expire_conn(_ConnTTL, _ConnAge) ->
+  false.
+
+%% Refresh the pids TTL if the TTL was previously disabled.
+maybe_refresh_conn_timestamp(OldTTL, Pids) when is_integer(OldTTL) andalso OldTTL > 0 ->
+  Pids;
+maybe_refresh_conn_timestamp(_OldTTL, Pids) ->
+  init_pids(maps:keys(Pids)).
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
