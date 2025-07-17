@@ -21,6 +21,7 @@
 -export([conflict_count/2]).
 -export([process_error_count/0]).
 -export([connection_count/1]).
+-export([connection_pool_stats/3]).
 -export([retry_count/2]).
 -export([request_count/2]).
 -export([request_duration/4]).
@@ -57,6 +58,21 @@ declare_metrics() ->
     {name, krc_connection_total},
     {labels, [state]},
     {help, "Client connection count"}
+  ]),
+  prometheus_gauge:declare([
+    {name, krc_pool_free_connections},
+    {labels, []},
+    {help, "Client pool free connections"}
+  ]),
+  prometheus_gauge:declare([
+    {name, krc_pool_busy_connections},
+    {labels, []},
+    {help, "Client pool busy connections"}
+  ]),
+  prometheus_gauge:declare([
+    {name, krc_pool_queue_size},
+    {labels, []},
+    {help, "Client pool queue size"}
   ]),
   prometheus_histogram:declare([
     {name, krc_request_duration_seconds},
@@ -100,6 +116,12 @@ process_error_count() ->
 -spec connection_count(start | stop | expired) -> any().
 connection_count(State) ->
     prometheus_counter:inc(krc_connection_total, [State], 1).
+
+-spec connection_pool_stats(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> any().
+connection_pool_stats(Free, Busy, QueueSize) ->
+    prometheus_gauge:set(krc_pool_free_connections, [], Free),
+    prometheus_gauge:set(krc_pool_busy_connections, [], Busy),
+    prometheus_gauge:set(krc_pool_queue_size, [], QueueSize).
 
 -spec request_duration(pos_integer(), atom(), binary(), binary()) -> any().
 request_duration(DurationNative, Result, Op, Bucket) ->

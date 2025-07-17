@@ -196,12 +196,16 @@ handle_call(stop, _From, S) ->
 handle_call({set_ttl, TTL}, _From, #s{conn_ttl=OldTTL, pids=Pids} = S) ->
   {reply, ok, S#s{conn_ttl=TTL,pids=maybe_refresh_conn_timestamp(OldTTL, Pids)}};
 handle_call(Req, From, #s{free=[]} = S) ->
-  {noreply, S#s{queue=queue:in(Req#req{from=From}, S#s.queue)}};
+  Queue = queue:in(Req#req{from=From}, S#s.queue),
+  telemetry_pool_event(S#s.free, S#s.busy, Queue),
+  {noreply, S#s{queue=Queue}};
 handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
   ?hence(queue:is_empty(S#s.queue)),
   Req = Req0#req{from=From},
   Pid ! {handle, Req},
-  {noreply, S#s{free=Pids, busy=[{Pid,Req}|S#s.busy]}}.
+  Busy = [{Pid,Req}|S#s.busy],
+  telemetry_pool_event(Pids, Busy, S#s.queue),
+  {noreply, S#s{free=Pids, busy=Busy}}.
 
 handle_cast(_Msg, S) -> {stop, bad_cast, S}.
 
@@ -252,6 +256,7 @@ handle_info({'EXIT', Pid, {shutdown, expired}},
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
                                   S#s.busy,
                                   S#s.queue),
+  telemetry_pool_event(Free, Busy, Queue),
   {noreply, S#s{ pids     = replace_pid(Pids, Pid, NewPid)
                , free     = Free
                , busy     = Busy
@@ -277,6 +282,7 @@ handle_info({'EXIT', Pid, Rsn},
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
                                   Busy1,
                                   S#s.queue),
+  telemetry_pool_event(Free, Busy, Queue),
   {noreply, S#s{ pids     = replace_pid(Pids, Pid, NewPid)
                , free     = Free
                , busy     = Busy
@@ -295,6 +301,7 @@ handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
       {noreply, S#s{busy = Busy0}};
     false ->
       {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
+      telemetry_pool_event(Free, Busy, Queue),
       {noreply, S#s{ free  = Free
                    , busy  = Busy
                    , queue = Queue}}
@@ -501,6 +508,12 @@ dopts() ->
   , {pw,              1}             % /
   , {dw,              quorum}        %/
   ].
+
+telemetry_pool_event(Free, Busy, Queue) ->
+  telemetry_event(
+    [pool, stats],
+    #{free => length(Free), busy => length(Busy), queue_size => queue:len(Queue)}
+   ).
 
 telemetry_event(Event, Data) ->
   telemetry:execute(
