@@ -1,10 +1,10 @@
 {"1.2.0",
-[{<<"hamcrest">>,
+[{<<"ddskerl">>,{pkg,<<"ddskerl">>,<<"0.4.1">>},1},
+ {<<"hamcrest">>,
   {git,"https://github.com/basho/hamcrest-erlang.git",
        {ref,"ad3dbab419762fc2d5821abb88b989da006b85c6"}},
   2},
- {<<"prometheus">>,{pkg,<<"prometheus">>,<<"5.1.1">>},0},
- {<<"quantile_estimator">>,{pkg,<<"quantile_estimator">>,<<"1.0.2">>},1},
+ {<<"prometheus">>,{pkg,<<"prometheus">>,<<"6.0.1">>},0},
  {<<"riak_pb">>,
   {git,"https://github.com/basho/riak_pb",
        {ref,"08771aba2ce4935b715d32d1b92555efdc3da994"}},
@@ -20,11 +20,11 @@
  {<<"telemetry">>,{pkg,<<"telemetry">>,<<"1.3.0">>},0}]}.
 [
 {pkg_hash,[
- {<<"prometheus">>, <<"C84D8D3DD703B54B450FA1EDA1552AE70F9B72DB3C093A947E416257486925A7">>},
- {<<"quantile_estimator">>, <<"ECD281D40110FDD9BA62685531E4435E0839A52FD1058DA5564F1763E4642EF7">>},
+ {<<"ddskerl">>, <<"F0329E1F8FD3C6209F1645B540F6D4FC14C60B897B05E65B8A4122A362EF019A">>},
+ {<<"prometheus">>, <<"97026DEBDC70537084BA11267760D02702517A9E450C9B709C8972B540F116A3">>},
  {<<"telemetry">>, <<"FEDEBBAE410D715CF8E7062C96A1EF32EC22E764197F70CDA73D82778D61E7A2">>}]},
 {pkg_hash_ext,[
- {<<"prometheus">>, <<"82F8F8613E8CBC3B4DD1D7724F9807B3175B37DCD4C6CB903BB27C6A07591FF0">>},
- {<<"quantile_estimator">>, <<"DB404793D6384995A1AC6DD973E2CEE5BE9FCC128765BDBA53D87C564E296B64">>},
+ {<<"ddskerl">>, <<"0B68A1E53AF4CCF5F43D70F8EABA1F031388B3FCBD6405FA0CDF849FB47F1811">>},
+ {<<"prometheus">>, <<"EB83D1C5F38E6221F652A996DEF7BE586B827CEE73FFA722A3F6A53F12A40EB4">>},
  {<<"telemetry">>, <<"7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6">>}]}
 ].
