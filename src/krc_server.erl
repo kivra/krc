@@ -322,9 +322,8 @@ next_task([Pid|Free]=Free0, Busy, Queue0) ->
 
 %%%_  * pids data  ----------------------------------------------------
 init_pids(Pids) ->
-  Now = os:system_time(second),
   lists:foldl(
-    fun(Pid, Map) -> maps:put(Pid, Now, Map) end,
+    fun(Pid, Map) -> maps:put(Pid, conn_timestamp(), Map) end,
     #{},
     Pids).
 
@@ -333,7 +332,7 @@ list_pids(PidsMap) ->
 
 replace_pid(PidsMap0, OldPid, NewPid) ->
   PidsMap1 = maps:remove(OldPid, PidsMap0),
-  maps:put(NewPid, os:system_time(second), PidsMap1).
+  maps:put(NewPid, conn_timestamp(), PidsMap1).
 
 remove_pid(PidsMap, Pid) ->
   maps:remove(Pid, PidsMap).
@@ -344,10 +343,9 @@ conn_age(Pid, PidsMap) ->
 
 %% A connection should get expired if all conditions below are true
 %% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
-%% - The age of the connection is bigger than the provided TTL plus a random
-%%   adjusted TTL.
+%% - The age of the connection is bigger than the provided TTL
 should_expire_conn(ConnTTL, ConnAge) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
-  ConnAge > ConnTTL + rand:uniform(?MAX_CONN_TTL_ADJUST_SEC);
+  ConnAge > ConnTTL;
 should_expire_conn(_ConnTTL, _ConnAge) ->
   false.
 
@@ -356,6 +354,11 @@ maybe_refresh_conn_timestamp(OldTTL, Pids) when is_integer(OldTTL) andalso OldTT
   Pids;
 maybe_refresh_conn_timestamp(_OldTTL, Pids) ->
   init_pids(maps:keys(Pids)).
+
+%% A random number is substracted to the timestamp to avoid connections being
+%% expired at the same time
+conn_timestamp() ->
+  os:system_time(second) - rand:uniform(?MAX_CONN_TTL_ADJUST_SEC).
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
