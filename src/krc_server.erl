@@ -125,6 +125,7 @@
 -type timestamp() :: integer().
 -type conn_attr() :: #{ ttl_timestamp := timestamp()
                       , expire_once := boolean()
+                      , random_seed := non_neg_integer()
                       }.
 -record(s,
         { client     :: atom()             %krc_riak_client
@@ -203,7 +204,7 @@ handle_call(stop, _From, S) ->
 handle_call({set_ttl, TTL}, _From, #s{conn_ttl=OldTTL, pids=Pids} = S) ->
   {reply, ok, S#s{conn_ttl=TTL,pids=maybe_refresh_conn_timestamp(OldTTL, Pids)}};
 handle_call(expire_connections_once, _From, #s{pids=Pids} = S) ->
-  {reply, ok, S#s{pids=set_expire_conn_flag(Pids)}};
+  {reply, ok, S#s{pids=set_expire_once_flag(Pids)}};
 handle_call(Req, From, #s{free=[]} = S) ->
   Queue = queue:in(Req#req{from=From}, S#s.queue),
   telemetry_pool_event(S#s.free, S#s.busy, Queue),
@@ -304,7 +305,7 @@ handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
   %% Take it out of the busy list no matter the next step
   {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
 
-  case should_expire_conn(ConnTTL, conn_age(Pid, Pids), conn_expire_flag(Pid, Pids)) of
+  case should_expire_conn(ConnTTL, Pid, Pids) of
     true ->
       Pid ! expire,
       {noreply, S#s{busy = Busy0}};
@@ -340,17 +341,10 @@ conn_attrs() ->
   conn_attrs(false).
 
 conn_attrs(ExpireOnce) ->
-  #{ ttl_timestamp => conn_timestamp()
+  #{ ttl_timestamp => os:system_time(second)
    , expire_once => ExpireOnce
+   , random_seed => rand:uniform(?MAX_CONN_TTL_ADJUST_SEC)
    }.
-
-conn_ttl_ts(Pid, PidsMap) ->
-  #{ttl_timestamp := TTL} = maps:get(Pid, PidsMap),
-  TTL.
-
-conn_expire_flag(Pid, PidsMap) ->
-  #{expire_once := ExpireOnce} = maps:get(Pid, PidsMap),
-  ExpireOnce.
 
 list_pids(PidsMap) ->
   maps:keys(PidsMap).
@@ -362,18 +356,33 @@ replace_pid(PidsMap0, OldPid, NewPid) ->
 remove_pid(PidsMap, Pid) ->
   maps:remove(Pid, PidsMap).
 
-conn_age(Pid, PidsMap) ->
-  Now = os:system_time(second),
-  Now - conn_ttl_ts(Pid, PidsMap).
+should_expire_conn(ConnTTL, Pid, PidsMap) ->
+  #{ ttl_timestamp := TTL
+   , expire_once := ExpireOnce
+   , random_seed := Seed } = maps:get(Pid, PidsMap),
+  ConnAge = os:system_time(second) - TTL,
+  %% A random number is substracted to the timestamp to avoid connections
+  %% being expired at the same time
+  AdjustedConnAge = ConnAge - Seed,
 
-%% A connection should get expired if all conditions below are true
+  should_expire_once(ConnTTL, ExpireOnce, Seed, ConnAge) orelse
+    should_expire_conn_ttl(ConnTTL, AdjustedConnAge).
+
+%% A connection should get expired due to 'expire_once' flag if:
+%% - Connection TTL is not set (this means connection TTL has priority)
+%% - Expire flag is set
+%% - Connection age is equal to the connection random seed (adds randomization)
+should_expire_once(0, true, Seed, ConnAge) ->
+  ConnAge > Seed;
+should_expire_once(_ConnTTL, _ExpireOnce, _Seed, _ConnAge) ->
+  false.
+
+%% A connection should get expired due to TTL expiration if:
 %% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
 %% - The age of the connection is bigger than the provided TTL
-should_expire_conn(_ConnTTL, _ConnAge, true) ->
-  true;
-should_expire_conn(ConnTTL, ConnAge, _ExpireFlag) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
+should_expire_conn_ttl(ConnTTL, ConnAge) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
   ConnAge > ConnTTL;
-should_expire_conn(_ConnTTL, _ConnAge, _ExpireFlag) ->
+should_expire_conn_ttl(_ConnTTL, _ConnAge) ->
   false.
 
 %% Refresh the pids TTL if the TTL was previously disabled.
@@ -383,16 +392,11 @@ maybe_refresh_conn_timestamp(_OldTTL, Pids) ->
   init_pids(maps:keys(Pids)).
 
 %% Sets the flag and resets the TTL timestamp
-set_expire_conn_flag(Pids) ->
+set_expire_once_flag(Pids) ->
   lists:foldl(
     fun(Pid, Map) -> maps:put(Pid, conn_attrs(true), Map) end,
     #{},
     maps:keys(Pids)).
-
-%% A random number is substracted to the timestamp to avoid connections being
-%% expired at the same time
-conn_timestamp() ->
-  os:system_time(second) - rand:uniform(?MAX_CONN_TTL_ADJUST_SEC).
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
