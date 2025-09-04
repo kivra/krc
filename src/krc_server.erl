@@ -76,6 +76,7 @@
         , start_link/2
         , stop/1
         , set_connection_ttl/2
+        , expire_connections_once/1
         ]).
 
 %% Riak API
@@ -122,11 +123,14 @@
 %%%_* Code =============================================================
 %%%_ * Types -----------------------------------------------------------
 -type timestamp() :: integer().
+-type conn_attr() :: #{ ttl_timestamp := timestamp()
+                      , expire_once := boolean()
+                      }.
 -record(s,
         { client     :: atom()             %krc_riak_client
         , ip         :: inet:ip_address()  %\ Riak
         , port       :: inet:port_number() %/ server
-        , pids       :: #{pid() := timestamp()} %Connections
+        , pids       :: #{pid() := conn_attr()} %Connections
         , failures=0 :: non_neg_integer()  %Connection crash counter
         , free       :: [pid()]
         , busy=[]    :: [{pid(), term()}]
@@ -171,6 +175,9 @@ stop(GS)            -> gen_server:call(GS, stop).
 set_connection_ttl(GS, TTL)
   when is_integer(TTL) andalso TTL >= 0 -> gen_server:call(GS, {set_ttl, TTL}).
 
+expire_connections_once(GS) ->
+  gen_server:call(GS, expire_connections_once).
+
 call(GS, Req)       -> call(GS, Req, ?TIMEOUT).
 call(GS, Req, T)    -> gen_server:call(
                          GS, #req{ts=s2_time:stamp(),req=Req}, T).
@@ -195,6 +202,8 @@ handle_call(stop, _From, S) ->
   {stop, stopped, ok, S}; %workers linked
 handle_call({set_ttl, TTL}, _From, #s{conn_ttl=OldTTL, pids=Pids} = S) ->
   {reply, ok, S#s{conn_ttl=TTL,pids=maybe_refresh_conn_timestamp(OldTTL, Pids)}};
+handle_call(expire_connections_once, _From, #s{pids=Pids} = S) ->
+  {reply, ok, S#s{pids=set_expire_conn_flag(Pids)}};
 handle_call(Req, From, #s{free=[]} = S) ->
   Queue = queue:in(Req#req{from=From}, S#s.queue),
   telemetry_pool_event(S#s.free, S#s.busy, Queue),
@@ -295,7 +304,7 @@ handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
   %% Take it out of the busy list no matter the next step
   {value, {Pid, #req{}}, Busy0} = lists:keytake(Pid, 1, S#s.busy),
 
-  case should_expire_conn(ConnTTL, conn_age(Pid, Pids)) of
+  case should_expire_conn(ConnTTL, conn_age(Pid, Pids), conn_expire_flag(Pid, Pids)) of
     true ->
       Pid ! expire,
       {noreply, S#s{busy = Busy0}};
@@ -323,30 +332,48 @@ next_task([Pid|Free]=Free0, Busy, Queue0) ->
 %%%_  * pids data  ----------------------------------------------------
 init_pids(Pids) ->
   lists:foldl(
-    fun(Pid, Map) -> maps:put(Pid, conn_timestamp(), Map) end,
+    fun(Pid, Map) -> maps:put(Pid, conn_attrs(), Map) end,
     #{},
     Pids).
+
+conn_attrs() ->
+  conn_attrs(false).
+
+conn_attrs(ExpireOnce) ->
+  #{ ttl_timestamp => conn_timestamp()
+   , expire_once => ExpireOnce
+   }.
+
+conn_ttl_ts(Pid, PidsMap) ->
+  #{ttl_timestamp := TTL} = maps:get(Pid, PidsMap),
+  TTL.
+
+conn_expire_flag(Pid, PidsMap) ->
+  #{expire_once := ExpireOnce} = maps:get(Pid, PidsMap),
+  ExpireOnce.
 
 list_pids(PidsMap) ->
   maps:keys(PidsMap).
 
 replace_pid(PidsMap0, OldPid, NewPid) ->
   PidsMap1 = maps:remove(OldPid, PidsMap0),
-  maps:put(NewPid, conn_timestamp(), PidsMap1).
+  maps:put(NewPid, conn_attrs(), PidsMap1).
 
 remove_pid(PidsMap, Pid) ->
   maps:remove(Pid, PidsMap).
 
 conn_age(Pid, PidsMap) ->
   Now = os:system_time(second),
-  Now - maps:get(Pid, PidsMap).
+  Now - conn_ttl_ts(Pid, PidsMap).
 
 %% A connection should get expired if all conditions below are true
 %% - Connection TTL is set to an integer bigger than 0 (0 means disabled)
 %% - The age of the connection is bigger than the provided TTL
-should_expire_conn(ConnTTL, ConnAge) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
+should_expire_conn(_ConnTTL, _ConnAge, true) ->
+  true;
+should_expire_conn(ConnTTL, ConnAge, _ExpireFlag) when is_integer(ConnTTL) andalso ConnTTL > 0 ->
   ConnAge > ConnTTL;
-should_expire_conn(_ConnTTL, _ConnAge) ->
+should_expire_conn(_ConnTTL, _ConnAge, _ExpireFlag) ->
   false.
 
 %% Refresh the pids TTL if the TTL was previously disabled.
@@ -354,6 +381,13 @@ maybe_refresh_conn_timestamp(OldTTL, Pids) when is_integer(OldTTL) andalso OldTT
   Pids;
 maybe_refresh_conn_timestamp(_OldTTL, Pids) ->
   init_pids(maps:keys(Pids)).
+
+%% Sets the flag and resets the TTL timestamp
+set_expire_conn_flag(Pids) ->
+  lists:foldl(
+    fun(Pid, Map) -> maps:put(Pid, conn_attrs(true), Map) end,
+    #{},
+    maps:keys(Pids)).
 
 %% A random number is substracted to the timestamp to avoid connections being
 %% expired at the same time
