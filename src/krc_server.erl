@@ -644,6 +644,31 @@ coverage_test() ->
      gen_server:cast(mah_krc, foo),
      {ok, bar} = code_change(foo,bar,baz))).
 
+should_expire_conn_test() ->
+  ConnTTL = 1,
+  NoConnTTL = 0,
+  Attrs = conn_attrs(),
+  %% Override random seed to force it to be small for the tests
+  Pids = #{ pid_no_expire_once => Attrs#{random_seed => 1}
+          , pid_expire_once => Attrs#{random_seed => 1, expire_once => true}
+          },
+
+  %% Just created should not expire
+  ?assertEqual(false, should_expire_conn(NoConnTTL, pid_no_expire_once, Pids)),
+  ?assertEqual(false, should_expire_conn(ConnTTL, pid_no_expire_once, Pids)),
+  ?assertEqual(false, should_expire_conn(NoConnTTL, pid_expire_once, Pids)),
+  ?assertEqual(false, should_expire_conn(ConnTTL, pid_expire_once, Pids)),
+
+  %% After connection TTL, the pid with expire once set should expire
+  timer:sleep(2 * ConnTTL * 1000), % age needs to be bigger to random seed
+  ?assertEqual(false, should_expire_conn(NoConnTTL, pid_no_expire_once, Pids)),
+  ?assertEqual(true, should_expire_conn(NoConnTTL, pid_expire_once, Pids)),
+
+  %% Any of the pids with conn TTL set should expire at this point
+  timer:sleep(ConnTTL * 1000), % random seed gets added to timestamp
+  ?assertEqual(true, should_expire_conn(ConnTTL, pid_no_expire_once, Pids)),
+  ?assertEqual(true, should_expire_conn(ConnTTL, pid_expire_once, Pids)).
+
 %% Requests.
 put_req() ->
   Obj = krc_obj:new(mah_bucket, self(), 42),
