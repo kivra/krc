@@ -142,6 +142,8 @@
         %% connections need to be drained in a node, e.g. for
         %% maintenance.
         , conn_ttl=0 ::  non_neg_integer()
+        %% Counts pending expirations. Only has a meaning with expire once
+        , expire_once_count=0 :: non_neg_integer()
         }).
 
 -record(req,
@@ -204,17 +206,17 @@ handle_call(stop, _From, S) ->
 handle_call({set_ttl, TTL}, _From, #s{conn_ttl=OldTTL, pids=Pids} = S) ->
   {reply, ok, S#s{conn_ttl=TTL,pids=maybe_refresh_conn_timestamp(OldTTL, Pids)}};
 handle_call(expire_connections_once, _From, #s{pids=Pids} = S) ->
-  {reply, ok, S#s{pids=set_expire_once_flag(Pids)}};
+  {reply, ok, S#s{pids=set_expire_once_flag(Pids),expire_once_count=length(list_pids(Pids))}};
 handle_call(Req, From, #s{free=[]} = S) ->
   Queue = queue:in(Req#req{from=From}, S#s.queue),
-  telemetry_pool_event(S#s.free, S#s.busy, Queue),
+  telemetry_pool_event(S#s.free, S#s.busy, Queue, S#s.expire_once_count),
   {noreply, S#s{queue=Queue}};
 handle_call(Req0, From, #s{free=[Pid|Pids]} = S) ->
   ?hence(queue:is_empty(S#s.queue)),
   Req = Req0#req{from=From},
   Pid ! {handle, Req},
   Busy = [{Pid,Req}|S#s.busy],
-  telemetry_pool_event(Pids, Busy, S#s.queue),
+  telemetry_pool_event(Pids, Busy, S#s.queue, S#s.expire_once_count),
   {noreply, S#s{free=Pids, busy=Busy}}.
 
 handle_cast(_Msg, S) -> {stop, bad_cast, S}.
@@ -255,7 +257,7 @@ handle_info({'EXIT', Pid, Rsn}, #s{failures=N} = S) when N > ?FAILURES ->
    ),
   {stop, failures, S};
 handle_info({'EXIT', Pid, {shutdown, expired}},
-            #s{client=Client, ip=IP, port=Port, pids=Pids} = S) ->
+            #s{client=Client, ip=IP, port=Port, pids=Pids, expire_once_count=ExpCount} = S) ->
   ?hence(lists:member(Pid, list_pids(Pids))),
   ?debug("Krc EXIT ~p: expired connection", [Pid]),
   telemetry_event([connection, expired], #{pid => Pid}),
@@ -266,11 +268,13 @@ handle_info({'EXIT', Pid, {shutdown, expired}},
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
                                   S#s.busy,
                                   S#s.queue),
-  telemetry_pool_event(Free, Busy, Queue),
+  NewExpCount = update_expire_once_count(S#s.conn_ttl, ExpCount),
+  telemetry_pool_event(Free, Busy, Queue, NewExpCount),
   {noreply, S#s{ pids     = replace_pid(Pids, Pid, NewPid)
                , free     = Free
                , busy     = Busy
                , queue    = Queue
+               , expire_once_count = NewExpCount
                }};
 handle_info({'EXIT', Pid, Rsn},
             #s{client=Client, ip=IP, port=Port, failures=N, pids=Pids} = S) ->
@@ -292,12 +296,15 @@ handle_info({'EXIT', Pid, Rsn},
   {Free, Busy, Queue} = next_task([NewPid|S#s.free] -- [Pid],
                                   Busy1,
                                   S#s.queue),
-  telemetry_pool_event(Free, Busy, Queue),
+  %% Count flagged processes as the closed connection could be expired or not.
+  ExpCount = to_expire_count(Pids, S#s.expire_once_count),
+  telemetry_pool_event(Free, Busy, Queue, ExpCount),
   {noreply, S#s{ pids     = replace_pid(Pids, Pid, NewPid)
                , free     = Free
                , busy     = Busy
                , queue    = Queue
                , failures = N+1
+               , expire_once_count = ExpCount
                }};
 
 handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
@@ -311,7 +318,7 @@ handle_info({free, Pid}, #s{pids=Pids, conn_ttl=ConnTTL} = S) ->
       {noreply, S#s{busy = Busy0}};
     false ->
       {Free, Busy, Queue} = next_task(S#s.free ++ [Pid], Busy0, S#s.queue),
-      telemetry_pool_event(Free, Busy, Queue),
+      telemetry_pool_event(Free, Busy, Queue, S#s.expire_once_count),
       {noreply, S#s{ free  = Free
                    , busy  = Busy
                    , queue = Queue}}
@@ -397,6 +404,22 @@ set_expire_once_flag(Pids) ->
     fun(Pid, Map) -> maps:put(Pid, conn_attrs(true), Map) end,
     #{},
     maps:keys(Pids)).
+
+%% Update count only when connection TTL is not set
+update_expire_once_count(_ConnTTL, 0) -> 0;
+update_expire_once_count(0, ExpCount) -> ExpCount - 1;
+update_expire_once_count(_ConnTTL, ExpCount) -> ExpCount.
+
+%% No need to count if no expiration was pending
+to_expire_count(_PidsMap, 0) -> 0;
+to_expire_count(PidsMap, _PrevCount) ->
+  lists:foldl(
+    fun(#{expire_once := true}, C) -> C + 1;
+       (_, C) -> C
+    end,
+    0,
+    maps:values(PidsMap)
+   ).
 
 %%%_  * Connections ----------------------------------------------------
 connection_start(Client, IP, Port, Daddy) ->
@@ -550,10 +573,13 @@ dopts() ->
   , {dw,              quorum}        %/
   ].
 
-telemetry_pool_event(Free, Busy, Queue) ->
+telemetry_pool_event(Free, Busy, Queue, ExpOnceCount) ->
   telemetry_event(
     [pool, stats],
-    #{free => length(Free), busy => length(Busy), queue_size => queue:len(Queue)}
+    #{ free => length(Free)
+     , busy => length(Busy)
+     , queue_size => queue:len(Queue)
+     , to_expire => ExpOnceCount}
    ).
 
 telemetry_event(Event, Data) ->
