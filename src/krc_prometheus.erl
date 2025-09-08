@@ -21,7 +21,7 @@
 -export([conflict_count/2]).
 -export([process_error_count/0]).
 -export([connection_count/1]).
--export([connection_pool_stats/3]).
+-export([connection_pool_stats/4]).
 -export([retry_count/2]).
 -export([request_count/2]).
 -export([request_duration/4]).
@@ -74,6 +74,11 @@ declare_metrics() ->
     {labels, []},
     {help, "Client pool queue size"}
   ]),
+  prometheus_gauge:declare([
+    {name, krc_pool_to_expire},
+    {labels, []},
+    {help, "Client pool connections labeled for expiration"}
+  ]),
   prometheus_histogram:declare([
     {name, krc_request_duration_seconds},
     {labels, [result, operation, bucket]},
@@ -117,11 +122,14 @@ process_error_count() ->
 connection_count(State) ->
     prometheus_counter:inc(krc_connection_total, [State], 1).
 
--spec connection_pool_stats(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> any().
-connection_pool_stats(Free, Busy, QueueSize) ->
+-spec connection_pool_stats(
+        non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()
+       ) -> any().
+connection_pool_stats(Free, Busy, QueueSize, ToExpire) ->
     prometheus_gauge:set(krc_pool_free_connections, [], Free),
     prometheus_gauge:set(krc_pool_busy_connections, [], Busy),
-    prometheus_gauge:set(krc_pool_queue_size, [], QueueSize).
+    prometheus_gauge:set(krc_pool_queue_size, [], QueueSize),
+    prometheus_gauge:set(krc_pool_to_expire, [], ToExpire).
 
 -spec request_duration(pos_integer(), atom(), binary(), binary()) -> any().
 request_duration(DurationNative, Result, Op, Bucket) ->
