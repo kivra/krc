@@ -4,7 +4,7 @@
   {git,"https://github.com/basho/hamcrest-erlang.git",
        {ref,"ad3dbab419762fc2d5821abb88b989da006b85c6"}},
   2},
- {<<"prometheus">>,{pkg,<<"prometheus">>,<<"6.0.3">>},0},
+ {<<"prometheus">>,{pkg,<<"prometheus">>,<<"6.1.0">>},0},
  {<<"riak_pb">>,
   {git,"https://github.com/basho/riak_pb",
        {ref,"08771aba2ce4935b715d32d1b92555efdc3da994"}},
@@ -21,10 +21,10 @@
 [
 {pkg_hash,[
  {<<"ddskerl">>, <<"A51A90BE9AC9B36A94017670BED479C623B10CA9D4BDA1EDF3A0E48CAEEADA2A">>},
- {<<"prometheus">>, <<"95302236124C0F919163A7762BF7D2B171B919B6FF6148D26EB38A5D2DEF7B81">>},
+ {<<"prometheus">>, <<"F62F0272AB5FEC6CF19934F2495BD97998B05DB08BAB3456BBD5544995C5FD12">>},
  {<<"telemetry">>, <<"FEDEBBAE410D715CF8E7062C96A1EF32EC22E764197F70CDA73D82778D61E7A2">>}]},
 {pkg_hash_ext,[
  {<<"ddskerl">>, <<"63F907373D7E548151D584D4DA8A38928FD26EC9477B94C0FFAAD87D7CB69FE7">>},
- {<<"prometheus">>, <<"53554ECADAC0354066801D514D1A244DD026175E4EE3A9A30192B71D530C8268">>},
+ {<<"prometheus">>, <<"0958FBCE445A7139478C101362CDE05908174004E703345736CAC671D8628680">>},
  {<<"telemetry">>, <<"7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6">>}]}
 ].
