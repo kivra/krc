@@ -455,7 +455,7 @@ connection(Client, Pid, Daddy) ->
               gen_server:reply(From, Err);
             {error, Rsn} = Err ->
               ?error("error: ~p", [Rsn]),
-              telemetry_event(Event,  maps:merge(Metadata, #{result => error, error => Rsn})),
+              telemetry_event(Event, maps:merge(Metadata, #{result => error, error => Rsn})),
               gen_server:reply(From, Err);
             {ok, ok} ->
               telemetry_event(Event, maps:put(result, ok, Metadata)),
@@ -466,10 +466,10 @@ connection(Client, Pid, Daddy) ->
           end;
         {false, _} ->
           ?info("dropping request ~p from ~p: DOWN", [Req, Caller]),
-          telemetry_event(Event, maps:put(error, dropped, Metadata));
+          telemetry_event(Event, maps:merge(Metadata, #{result => error, error => dropped}));
         {_, false} ->
           ?info("dropping request ~p from ~p: out of time", [Req, Caller]),
-          telemetry_event(Event, maps:put(error, out_of_time, Metadata)),
+          telemetry_event(Event, maps:merge(Metadata, #{result => error, error => out_of_time})),
           gen_server:reply(From, {error, timeout})
       end,
       Daddy ! {free, self()};
