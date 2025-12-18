@@ -65,7 +65,6 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
-
   release:
     if: github.ref == 'refs/heads/master' && startsWith(github.event.head_commit.message, 'no-release:') == false
     runs-on: ubuntu-24.04
