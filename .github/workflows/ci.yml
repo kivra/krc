@@ -84,9 +84,6 @@ jobs:
 
     - name: Create a GitHub release
       run: |
-        if ! command -v gh >/dev/null 2>&1; then
-          curl -sS https://webi.sh/gh | sh
-        fi
         gh release create ${{ steps.tag-version.outputs.new_tag }} --generate-notes --latest
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
