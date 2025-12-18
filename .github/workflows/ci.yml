@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   ci:
+    if: github.ref != 'refs/heads/master'
     name: ci
     runs-on: ubuntu-24.04
 
