@@ -4,8 +4,12 @@ permissions:
   contents: write
 
 on:
-  # for feature branches and releases
+  # for feature branches
+  pull_request:
+  # for releases
   push:
+    branches:
+      - master
 
 concurrency:
   group: ${{ (github.ref != 'refs/heads/master') && format('{0}-{1}', github.ref, github.workflow) || github.run_id }}
@@ -13,7 +17,6 @@ concurrency:
 
 jobs:
   ci:
-    if: github.ref != 'refs/heads/master'
     name: ci
     runs-on: ubuntu-24.04
 
