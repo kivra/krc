@@ -6,6 +6,10 @@ permissions:
 on:
   # for feature branches
   pull_request:
+  # for releases
+  push:
+    branches:
+      - master
 
 concurrency:
   group: ${{ (github.ref != 'refs/heads/master') && format('{0}-{1}', github.ref, github.workflow) || github.run_id }}
@@ -60,3 +64,26 @@ jobs:
         env:
           HEAD_REF: ${{ github.head_ref }}
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+  release:
+    if: github.ref == 'refs/heads/master' && startsWith(github.event.head_commit.message, 'no-release:') == false
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      with:
+        fetch-depth: 0
+        token: ${{secrets.GITHUB_TOKEN}}
+
+    - name: Bump version and push tag
+      id: tag-version
+      uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        dry_run: true
+        release_branches: master
+
+    - name: Create a GitHub release
+      run: |
+        gh release create ${{ steps.tag-version.outputs.new_tag }} --generate-notes --latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
