@@ -125,7 +125,7 @@ do_call(F, A, #s{lag=Lag} = S) ->
 do(get, [B, K, _, _], #s{tabs=Tabs} = S) ->
   {S, case maps:find({B, K}, Tabs) of
         {ok, Obj} -> {ok, Obj};
-        error -> {error, not_found}
+        error -> {error, notfound}
       end};
 do(get_index, [B, I, K, _], #s{idxs=Idxs} = S) ->
   {S, case maps:find(K, maps:get({B, I}, Idxs, #{})) of
@@ -179,11 +179,11 @@ get_put_delete_test() ->
   {ok, Pid}         = start(),
 
   Obj               = krc_obj:new(mah_bucket, mah_key, mah_val),
-  {error, not_found} = get(Pid, mah_bucket, mah_key, [], 1000),
+  {error, notfound} = get(Pid, mah_bucket, mah_key, [], 1000),
   ok                = put(Pid, Obj, [], 1000),
   {ok, Obj}         = get(Pid, mah_bucket, mah_key, [], 1000),
   ok                = delete(Pid, mah_bucket, mah_key, [], 1000),
-  {error, not_found} = get(Pid, mah_bucket, mah_key, [], 1000),
+  {error, notfound} = get(Pid, mah_bucket, mah_key, [], 1000),
 
   stop().
 
