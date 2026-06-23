@@ -94,9 +94,9 @@ call(Pid, {_F, A} = Req) ->
 
 %%%_ * gen_server callbacks --------------------------------------------
 -record(s,
-        { tabs=s2_maps:new()                   :: _
-        , idxs=s2_maps:new()                   :: _
-        , revdxs=s2_maps:new()                 :: _
+        { tabs=#{}                             :: #{{_,_} => _}
+        , idxs=#{}                             :: #{{_,_} => #{_ => [_]}}
+        , revdxs=#{}                           :: #{{_,_} => [{_,_}]}
         , con=true                             :: boolean()
         , lag=0                                :: timeout()
         }).
@@ -123,52 +123,53 @@ do_call(F, A, #s{lag=Lag} = S) ->
   do(F, A, S).
 
 do(get, [B, K, _, _], #s{tabs=Tabs} = S) ->
-  {S, s2_maps:get(Tabs, [B, K])};
+  {S, case maps:find({B, K}, Tabs) of
+        {ok, Obj} -> {ok, Obj};
+        error -> {error, not_found}
+      end};
 do(get_index, [B, I, K, _], #s{idxs=Idxs} = S) ->
-  {S, case s2_maps:get(Idxs, [B, I, K]) of
+  {S, case maps:find(K, maps:get({B, I}, Idxs, #{})) of
         {ok, _} = Ok      -> Ok;
-        {error, notfound} -> {ok, []}
+        error -> {ok, []}
       end};
 do(get_index, [B, I, L, U, _], #s{idxs=Idxs} = S) ->
-  {S, case s2_maps:get(Idxs, [B, I]) of
-        {ok, Dict} ->
-          lists:foldl(
-            fun(K, Acc) ->
-              case s2_maps:get(Idxs, [B, I, K]) of
-                {ok, Keys}        -> Keys ++ Acc;
-                {error, notfound} -> Acc
-              end
-            end, [], [K || K <- dict:fetch_keys(Dict), L =< K, K =< U]);
-        {error, notfound} -> {ok, []}
+  {S, case maps:find({B, I}, Idxs) of
+        {ok, IndexMap} ->
+          {ok, [V || K <- maps:keys(IndexMap), L =< K, K =< U, V <- maps:get(K, IndexMap)]};
+        error -> 
+          {ok, []}
       end};
 do(ping, [_], S) ->
   {S, ok};
-do(put, [O, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
-  Bucket  = krc_obj:bucket(O),
-  Key     = krc_obj:key(O),
-  Indices = krc_obj:indices(O),
-  Tabs    = s2_maps:set(Tabs0, [Bucket, Key], O),
-  Idxs    = lists:foldl(
+do(put, [Object, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
+  Bucket  = krc_obj:bucket(Object),
+  Key     = krc_obj:key(Object),
+  Indices = krc_obj:indices(Object),
+  Tabs    = maps:put({Bucket, Key}, Object, Tabs0),
+  IdxsRes    = lists:foldl(
               fun({Idx, IdxKey}, Idxs) ->
-                add(Idxs, [Bucket, Idx, IdxKey], Key)
+                Values = maps:get({Bucket, Idx}, Idxs, #{}),
+                maps:put({Bucket, Idx}, 
+                          maps:update_with(IdxKey, fun(Ks) -> [Key|Ks] end, [Key], Values), 
+                          Idxs)
               end, Idxs0, Indices),
-  Revdxs  = lists:foldl(
+  RevdxsRes  = lists:foldl(
               fun(Index, Revdxs) ->
-                add(Revdxs, [Bucket, Key], Index)
+                maps:update_with({Bucket, Key}, fun(Is) -> [Index|Is] end, [Index], Revdxs)
               end, Revdxs0, Indices),
-  {S#s{tabs=Tabs, idxs=Idxs, revdxs=Revdxs}, ok};
-do(delete, [B, K, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
-  Indices = s2_maps:get(Revdxs0, [B, K], []),
-  Tabs    = s2_maps:delete(Tabs0, [B, K]),
-  Idxs    = lists:foldl(
-              fun({Idx, IdxKey}, Idxs) ->
-                del(Idxs, [B, Idx, IdxKey], K)
-              end, Idxs0, Indices),
-  Revdxs  = s2_maps:delete(Revdxs0, [B, K]),
-  {S#s{tabs=Tabs, idxs=Idxs, revdxs=Revdxs}, ok}.
-
-add(Map, Ks, V) -> s2_maps:update(Map, Ks, s2_lists:cons(V), [V]).
-del(Map, Ks, V) -> s2_maps:update(Map, Ks, fun(Vs) -> Vs -- [V] end, []).
+  {S#s{tabs=Tabs, idxs=IdxsRes, revdxs=RevdxsRes}, ok};
+do(delete, [Bucket, K, _, _], #s{tabs=Tabs0, idxs=Idxs0, revdxs=Revdxs0} = S) ->
+  Indices = maps:get({Bucket, K}, Revdxs0, []),
+  Tabs    = maps:remove({Bucket, K}, Tabs0),
+  IdxsRes    = lists:foldl(
+               fun({Idx, IdxKey}, Idxs) ->
+               Values = maps:get({Bucket, Idx}, Idxs, #{}),
+                 maps:put({Bucket, Idx}, 
+                          maps:update_with(IdxKey, fun(Ks) -> Ks -- [K] end, [], Values),
+                          Idxs)
+               end, Idxs0, Indices),
+   Revdxs  = maps:remove({Bucket, K}, Revdxs0),
+  {S#s{tabs=Tabs, idxs=IdxsRes, revdxs=Revdxs}, ok}.
 
 %%%_* Tests ============================================================
 -ifdef(TEST).
@@ -178,11 +179,11 @@ get_put_delete_test() ->
   {ok, Pid}         = start(),
 
   Obj               = krc_obj:new(mah_bucket, mah_key, mah_val),
-  {error, notfound} = get(Pid, mah_bucket, mah_key, [], 1000),
+  {error, not_found} = get(Pid, mah_bucket, mah_key, [], 1000),
   ok                = put(Pid, Obj, [], 1000),
   {ok, Obj}         = get(Pid, mah_bucket, mah_key, [], 1000),
   ok                = delete(Pid, mah_bucket, mah_key, [], 1000),
-  {error, notfound} = get(Pid, mah_bucket, mah_key, [], 1000),
+  {error, not_found} = get(Pid, mah_bucket, mah_key, [], 1000),
 
   stop().
 
@@ -249,3 +250,4 @@ coverage_test() ->
 %%% allout-layout: t
 %%% erlang-indent-level: 2
 %%% End:
+
