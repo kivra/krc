@@ -29,6 +29,9 @@
     enabled: true,
   },
 
+  // Global options - forking
+  forkProcessing: "enabled",
+
   // Standard managers
   "renovate-config": {
     enabled: false,
