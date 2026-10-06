@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   ci:
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     name: ci
     runs-on: ubuntu-24.04
 
@@ -28,12 +29,11 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
         with:
           otp-version: 26
-          rebar3-version: 3.24
+          rebar3-version: '3.24'
 
       - run: |
           # Since we can't force CI to run after pushing rebar.lock
@@ -79,7 +79,6 @@ jobs:
     - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         fetch-depth: 0
-        token: ${{secrets.GITHUB_TOKEN}}
 
     - name: Bump version and push tag
       id: tag-version
@@ -90,7 +89,8 @@ jobs:
         release_branches: ${{ github.event.repository.default_branch }}
 
     - name: Create a GitHub release
-      run: |
-        gh release create ${{ steps.tag-version.outputs.new_tag }} --generate-notes --latest
+      if: steps.tag-version.outputs.new_tag != ''
+      run: gh release create "${NEW_TAG}" --generate-notes --latest
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        NEW_TAG: ${{ steps.tag-version.outputs.new_tag }}
