@@ -200,8 +200,8 @@ list_keys(S, B) -> krc_server:list_keys(S, B).
 -spec ping(server(), timeout()) -> whynot(_).
 ping(S, Timeout) -> krc_server:ping(S, Timeout).
 
--spec put(server(), obj())          -> whynot(_).
--spec put(server(), obj(), props()) -> whynot(_).
+-spec put(server(), obj())          -> whynot(_) | {ok, obj()}.
+-spec put(server(), obj(), props()) -> whynot(_) | {ok, obj()}.
 %% @doc Store O.
 put(S, O)       -> put_loop(S, O).
 put(S, O, Opts) -> put_loop(S, O, Opts).
