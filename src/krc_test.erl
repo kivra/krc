@@ -56,8 +56,8 @@ do_spawn(Opts, Thunk) ->
      true -> Pids
   end.
 
-sync([])   -> ok;
-sync(Pids) -> receive {Pid, sync} -> sync(Pids -- [Pid]) end.
+sync([])         -> ok;
+sync([Pid|Pids]) -> receive {Pid, sync} -> sync(Pids) end.
 
 %%%_ * with_* ----------------------------------------------------------
 with_mock(Thunk) ->

@@ -638,8 +638,9 @@ worker_crash_test() ->
     {links, [Pid]} = erlang:process_info(whereis(krc_server), links),
     exit(Pid, die),
     timer:sleep(100), %make sure request is routed to new worker
-    krc_test:spawn_async(?thunk({error, notfound} = get_req())),
-    krc_test:spawn_sync(?thunk({error, notfound} = get_req())))).
+    Async = krc_test:spawn_async(?thunk({error, notfound} = get_req())),
+    krc_test:spawn_sync(?thunk({error, notfound} = get_req())),
+    krc_test:sync(Async))).
 
 disconnected_request_test() ->
   krc_test:with_mock(?thunk(
