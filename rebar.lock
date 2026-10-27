@@ -15,7 +15,7 @@
   0},
  {<<"stdlib2">>,
   {git,"https://github.com/kivra/stdlib2.git",
-       {ref,"f5fdd13de0f02d7b1f9482133a7e4bf8cce14974"}},
+       {ref,"5f39f418534013468fa005572a22e4174d455eb6"}},
   0},
  {<<"telemetry">>,{pkg,<<"telemetry">>,<<"1.4.2">>},0}]}.
 [
