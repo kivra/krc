@@ -1,0 +1,108 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    ":dependencyDashboard",
+    "replacements:all",
+    "workarounds:all",
+    "helpers:renovateChangelog",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests",
+    ":pinDevDependencies",
+    ":configMigration"
+  ],
+
+  "timezone": "Europe/Stockholm",
+  "minimumReleaseAge": "7 days",
+  "schedule": ["* 10-15 * * 1-5"],
+
+  "commitMessageTopic": "{{depName}}",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "fix",
+  "automerge": true,
+  "labels": ["renovate"],
+
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+
+  "forkProcessing": "enabled",
+
+  "renovate-config": {
+    "enabled": false
+  },
+  "git-submodules": {
+    "enabled": true
+  },
+
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "minimumReleaseAge": null
+  },
+
+  "packageRules": [
+    {
+      "description": "Update Kivra-internal packages as instantly as possible",
+      "matchPackageNames": ["/^kivra\\/.*$/"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Always auto-merge non-major updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Never auto-merge major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Never auto-merge pre-v1 updates, since pre-v1 there are no guarantees on breakage",
+      "matchCurrentVersion": "/^v?0/",
+      "automerge": false
+    },
+    {
+      "description": "rebar.config: rebar.lock is refreshed outside Renovate, which then stops auto-merging",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["**/rebar.config"],
+      "prBodyNotes": [
+        "> [!NOTE]\n> This update may also change a lock file. If it does, Renovate can't auto-merge it. Once CI finishes, check Renovate's latest comment and do what it says: approve, or let it auto-merge."
+      ]
+    }
+  ],
+
+  "customManagers": [
+    {
+      "description": "rebar.config: {<dep>,\"x.y.z\"}, {<app>,\"x.y.z\",{pkg,<hex_name>}}",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)rebar\\.config$/"],
+      "datasourceTemplate": "hex",
+      "versioningTemplate": "semver",
+      "matchStrings": [
+        "\\n\\s*,?\\s*\\[?\\s*\\{\\s*'?(?<depName>[a-z][a-z0-9_]*)'?\\s*,\\s*\"v?(?<currentValue>\\d+\\.\\d+(\\.\\d+)?)\"\\s*[^,\\s]",
+        "\\n\\s*,?\\s*\\[?\\s*\\{\\s*'?[a-z][a-z0-9_]*'?\\s*,\\s*\"v?(?<currentValue>\\d+\\.\\d+(\\.\\d+)?)\"\\s*,\\s*\\{\\s*pkg\\s*,\\s*'?(?<depName>[a-z][a-z0-9_]*)'?\\s*\\}"
+      ]
+    },
+    {
+      "description": "rebar.config: GitHub dependencies",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)rebar\\.config$/"],
+      "datasourceTemplate": "github-tags",
+      "matchStrings": [
+        "\\{\\s*git(_subdir)?\\s*,\\s*\"(https://github\\.com/|git@github\\.com:)(?<org>[^/\"]+)/(?<repo>[^\"]+?)(\\.git)?\"\\s*,\\s*\\{\\s*tag\\s*,\\s*\"(?<prefix>.+/)?(?<currentValue>v?\\d+\\.\\d+(\\.\\d+)?)\""
+      ],
+      "depNameTemplate": "{{{org}}}/{{{repo}}}{{#if prefix}}/{{{replace '/$' '' prefix}}}{{/if}}",
+      "packageNameTemplate": "{{{org}}}/{{{repo}}}",
+      "extractVersionTemplate": "^{{{prefix}}}(?<version>.*$)"
+    },
+    {
+      "description": "mix.exs: GitHub dependencies",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)mix\\.exs$/"],
+      "datasourceTemplate": "github-tags",
+      "matchStrings": [
+        "\\{\\s*:(?<depName>[a-z][a-zA-Z0-9_]*)\\s*,\\s*git:\\s*\"git@github\\.com:(?<packageName>[^/\"]+/[^\"]+?)(\\.git)?\"\\s*,\\s*tag:\\s*\"(?<prefix>.+/)?(?<currentValue>v?\\d+\\.\\d+(\\.\\d+)?)\""
+      ],
+      "extractVersionTemplate": "^{{{prefix}}}(?<version>.+$)"
+    }
+  ]
+}
