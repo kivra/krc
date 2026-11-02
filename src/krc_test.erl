@@ -70,7 +70,7 @@ with_mock(Opts, Thunk) ->
     s2_procs:spinlock(?thunk(lists:member(krc_server, registered()))),
     Thunk()
   after
-    catch krc_server:stop(krc_server),
+    try krc_server:stop(krc_server) catch _:_ -> ok end,
     s2_procs:spinlock(?thunk(not lists:member(krc_server, registered()))),
     krc_mock_client:stop(),
     s2_procs:spinlock(?thunk(not lists:member(krc_mock_client, registered())))
